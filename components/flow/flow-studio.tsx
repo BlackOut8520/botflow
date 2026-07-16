@@ -131,6 +131,15 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
     dirtyRef.current = true
   }, [])
 
+  // ---- manual save (button) ----
+  const handleSaveNow = useCallback(async () => {
+    if (!activeFlowId) return
+    setSaveStatus("saving")
+    await saveFlow(activeFlowId, nodes, edges)
+    dirtyRef.current = false
+    setSaveStatus("saved")
+  }, [activeFlowId, nodes, edges])
+
   // wrap change handlers so only genuine edits flag the flow as dirty
   const handleNodesChange = useCallback(
     (changes: NodeChange<BotNode>[]) => {
@@ -235,13 +244,22 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
   )
 
   const handleDeleteFlow = useCallback(async () => {
-    if (!activeFlowId || flows.length <= 1) return
+    if (!activeFlowId) return
     const remaining = flows.filter((f) => f.id !== activeFlowId)
     setSwitching(true)
+    dirtyRef.current = false
     await deleteFlow(activeFlowId)
-    setFlows(remaining)
-    const next = await getFlow(remaining[0].id)
-    if (next) loadFlow(next)
+    if (remaining.length === 0) {
+      // deleting the last flow: start fresh with a new empty one
+      const summary = await createFlow()
+      const flow = await getFlow(summary.id)
+      setFlows([summary])
+      if (flow) loadFlow(flow)
+    } else {
+      setFlows(remaining)
+      const next = await getFlow(remaining[0].id)
+      if (next) loadFlow(next)
+    }
     setSwitching(false)
   }, [activeFlowId, flows, loadFlow])
 
@@ -324,6 +342,7 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
             onCreate={handleCreateFlow}
             onRename={handleRenameFlow}
             onDelete={handleDeleteFlow}
+            onSave={handleSaveNow}
           />
         </header>
 

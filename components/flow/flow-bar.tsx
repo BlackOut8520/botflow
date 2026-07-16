@@ -5,7 +5,17 @@ import type { FlowSummary } from "@/app/actions/flows"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, Pencil, Trash2, Check, X, Loader2, CloudCheck, Cloud } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
+import { Plus, Pencil, Trash2, Check, X, Loader2, CloudCheck, Cloud, Save } from "lucide-react"
 
 export type SaveStatus = "idle" | "saving" | "saved"
 
@@ -18,6 +28,7 @@ interface FlowBarProps {
   onCreate: () => void
   onRename: (name: string) => void
   onDelete: () => void
+  onSave: () => void
 }
 
 export function FlowBar({
@@ -29,10 +40,12 @@ export function FlowBar({
   onCreate,
   onRename,
   onDelete,
+  onSave,
 }: FlowBarProps) {
   const active = flows.find((f) => f.id === activeFlowId) ?? null
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const startEditing = () => {
     setDraft(active?.name ?? "")
@@ -93,11 +106,23 @@ export function FlowBar({
             size="icon"
             variant="ghost"
             className="size-9 text-muted-foreground hover:text-destructive"
-            onClick={onDelete}
+            onClick={() => setConfirmDelete(true)}
             aria-label="Eliminar flujo"
-            disabled={!active || flows.length <= 1}
+            disabled={!active}
           >
             <Trash2 className="size-4" />
+          </Button>
+
+          <div className="mx-1 h-5 w-px bg-border" aria-hidden />
+
+          <Button
+            variant="default"
+            className="h-9 gap-1.5"
+            onClick={onSave}
+            disabled={!active || switching || saveStatus === "saving"}
+          >
+            <Save className="size-4" />
+            Guardar
           </Button>
         </>
       )}
@@ -120,6 +145,28 @@ export function FlowBar({
           </>
         )}
       </span>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar este flujo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {active
+                ? `Se eliminará "${active.name}" de forma permanente. Esta acción no se puede deshacer.`
+                : "Esta acción no se puede deshacer."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={onDelete}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
