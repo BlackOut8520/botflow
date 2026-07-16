@@ -13,20 +13,31 @@ import {
   useEdgesState,
   useReactFlow,
   type Connection,
+  type NodeChange,
+  type EdgeChange,
   type OnSelectionChangeParams,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 
 import type { BotNode, BotNodeData, NodeKind } from "@/lib/flow-types"
 import { NODE_KINDS } from "@/lib/flow-types"
-import { initialNodes, initialEdges } from "@/lib/initial-flow"
 import { NODE_VAR } from "@/lib/node-visuals"
 import { useSimulator } from "@/lib/use-simulator"
+import {
+  type FlowSummary,
+  type FlowDetail,
+  getFlow,
+  createFlow,
+  saveFlow,
+  renameFlow,
+  deleteFlow,
+} from "@/app/actions/flows"
 import { SimulationContext } from "./simulation-context"
 import { BotNode as BotNodeComponent } from "./bot-node"
 import { NodePalette } from "./node-palette"
 import { PropertiesPanel } from "./properties-panel"
 import { Simulator } from "./simulator"
+import { FlowBar, type SaveStatus } from "./flow-bar"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Workflow } from "lucide-react"
 
@@ -72,40 +83,100 @@ function defaultData(kind: NodeKind): BotNodeData {
 
 const nodeTypes = { bot: BotNodeComponent }
 
-function StudioInner() {
-  const [nodes, setNodes, onNodesChange] = useNodesState<BotNode>(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+const START_ONLY: BotNode[] = [
+  { id: "start", type: "bot", position: { x: 0, y: 160 }, data: { kind: "start", label: "Inicio" } },
+]
+
+/** Changes that represent real user edits worth persisting. */
+function isMeaningful(changes: NodeChange[] | EdgeChange[]) {
+  return changes.some((c) => c.type !== "select" && c.type !== "dimensions")
+}
+
+interface StudioInnerProps {
+  initialFlows: FlowSummary[]
+  initialFlow: FlowDetail | null
+}
+
+function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState<BotNode>(initialFlow?.nodes ?? START_ONLY)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlow?.edges ?? [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tab, setTab] = useState<"blocks" | "props">("blocks")
+
+  // flow management
+  const [flows, setFlows] = useState<FlowSummary[]>(initialFlows)
+  const [activeFlowId, setActiveFlowId] = useState<string | null>(initialFlow?.id ?? null)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
+  const [switching, setSwitching] = useState(false)
+  const dirtyRef = useRef(false)
+
   const wrapperRef = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition, setCenter } = useReactFlow()
 
   const sim = useSimulator({ nodes, edges })
 
+  // ---- autosave (debounced) ----
+  useEffect(() => {
+    if (!activeFlowId || !dirtyRef.current) return
+    setSaveStatus("saving")
+    const t = setTimeout(async () => {
+      await saveFlow(activeFlowId, nodes, edges)
+      dirtyRef.current = false
+      setSaveStatus("saved")
+    }, 800)
+    return () => clearTimeout(t)
+  }, [nodes, edges, activeFlowId])
+
+  const markDirty = useCallback(() => {
+    dirtyRef.current = true
+  }, [])
+
+  // wrap change handlers so only genuine edits flag the flow as dirty
+  const handleNodesChange = useCallback(
+    (changes: NodeChange<BotNode>[]) => {
+      if (isMeaningful(changes)) markDirty()
+      onNodesChange(changes)
+    },
+    [onNodesChange, markDirty],
+  )
+  const handleEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      if (isMeaningful(changes)) markDirty()
+      onEdgesChange(changes)
+    },
+    [onEdgesChange, markDirty],
+  )
+
   const onConnect = useCallback(
-    (connection: Connection) => setEdges((eds) => addEdge({ ...connection, animated: false }, eds)),
-    [setEdges],
+    (connection: Connection) => {
+      markDirty()
+      setEdges((eds) => addEdge({ ...connection, animated: false }, eds))
+    },
+    [setEdges, markDirty],
   )
 
   const updateNodeData = useCallback(
     (id: string, patch: Partial<BotNodeData>) => {
+      markDirty()
       setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)))
     },
-    [setNodes],
+    [setNodes, markDirty],
   )
 
   const deleteNode = useCallback(
     (id: string) => {
+      markDirty()
       setNodes((nds) => nds.filter((n) => n.id !== id))
       setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id))
       setSelectedId(null)
       setTab("blocks")
     },
-    [setNodes, setEdges],
+    [setNodes, setEdges, markDirty],
   )
 
   const addNode = useCallback(
     (kind: NodeKind, position?: { x: number; y: number }) => {
+      markDirty()
       const id = newId()
       const pos = position ?? {
         x: 200 + Math.random() * 200,
@@ -116,8 +187,63 @@ function StudioInner() {
       setSelectedId(id)
       setTab("props")
     },
-    [setNodes],
+    [setNodes, markDirty],
   )
+
+  // ---- flow switching / management ----
+  const loadFlow = useCallback(
+    (flow: FlowDetail) => {
+      dirtyRef.current = false
+      setActiveFlowId(flow.id)
+      setNodes(flow.nodes)
+      setEdges(flow.edges)
+      setSelectedId(null)
+      setTab("blocks")
+      setSaveStatus("idle")
+      sim.reset()
+    },
+    [setNodes, setEdges, sim],
+  )
+
+  const handleSelectFlow = useCallback(
+    async (id: string) => {
+      if (id === activeFlowId) return
+      setSwitching(true)
+      const flow = await getFlow(id)
+      if (flow) loadFlow(flow)
+      setSwitching(false)
+    },
+    [activeFlowId, loadFlow],
+  )
+
+  const handleCreateFlow = useCallback(async () => {
+    setSwitching(true)
+    const summary = await createFlow()
+    const flow = await getFlow(summary.id)
+    setFlows((f) => [summary, ...f])
+    if (flow) loadFlow(flow)
+    setSwitching(false)
+  }, [loadFlow])
+
+  const handleRenameFlow = useCallback(
+    async (name: string) => {
+      if (!activeFlowId) return
+      setFlows((f) => f.map((x) => (x.id === activeFlowId ? { ...x, name } : x)))
+      await renameFlow(activeFlowId, name)
+    },
+    [activeFlowId],
+  )
+
+  const handleDeleteFlow = useCallback(async () => {
+    if (!activeFlowId || flows.length <= 1) return
+    const remaining = flows.filter((f) => f.id !== activeFlowId)
+    setSwitching(true)
+    await deleteFlow(activeFlowId)
+    setFlows(remaining)
+    const next = await getFlow(remaining[0].id)
+    if (next) loadFlow(next)
+    setSwitching(false)
+  }, [activeFlowId, flows, loadFlow])
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -185,10 +311,20 @@ function StudioInner() {
           <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Workflow className="size-5" />
           </span>
-          <div>
+          <div className="mr-2">
             <h1 className="text-base font-semibold leading-tight text-foreground">FlowBot Studio</h1>
             <p className="text-xs text-muted-foreground">Diseña y simula el flujo de tu bot conversacional</p>
           </div>
+          <FlowBar
+            flows={flows}
+            activeFlowId={activeFlowId}
+            saveStatus={saveStatus}
+            switching={switching}
+            onSelect={handleSelectFlow}
+            onCreate={handleCreateFlow}
+            onRename={handleRenameFlow}
+            onDelete={handleDeleteFlow}
+          />
         </header>
 
         <div className="flex min-h-0 flex-1">
@@ -219,8 +355,8 @@ function StudioInner() {
             <ReactFlow
               nodes={nodes}
               edges={styledEdges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
+              onNodesChange={handleNodesChange}
+              onEdgesChange={handleEdgesChange}
               onConnect={onConnect}
               onSelectionChange={onSelectionChange}
               onPaneClick={() => setSelectedId(null)}
@@ -261,10 +397,10 @@ function StudioInner() {
   )
 }
 
-export function FlowStudio() {
+export function FlowStudio({ initialFlows, initialFlow }: StudioInnerProps) {
   return (
     <ReactFlowProvider>
-      <StudioInner />
+      <StudioInner initialFlows={initialFlows} initialFlow={initialFlow} />
     </ReactFlowProvider>
   )
 }
