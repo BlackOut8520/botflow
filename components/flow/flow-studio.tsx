@@ -41,9 +41,6 @@ import { FlowBar, type SaveStatus } from "./flow-bar"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Workflow } from "lucide-react"
 
-let idCounter = 100
-const newId = () => `n${++idCounter}`
-
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -186,7 +183,7 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
   const addNode = useCallback(
     (kind: NodeKind, position?: { x: number; y: number }) => {
       markDirty()
-      const id = newId()
+      const id = uid("n")
       const pos = position ?? {
         x: 200 + Math.random() * 200,
         y: 100 + Math.random() * 200,
