@@ -35,6 +35,7 @@ import {
 } from "@/app/actions/flows"
 import { SimulationContext } from "./simulation-context"
 import { BotNode as BotNodeComponent } from "./bot-node"
+import { CustomEdge } from "./custom-edge"
 import { NodePalette } from "./node-palette"
 import { PropertiesPanel } from "./properties-panel"
 import { Simulator } from "./simulator"
@@ -80,6 +81,7 @@ function defaultData(kind: NodeKind): BotNodeData {
 }
 
 const nodeTypes = { bot: BotNodeComponent }
+const edgeTypes = { default: CustomEdge }
 
 const START_ONLY: BotNode[] = [
   { id: "start", type: "bot", position: { x: 0, y: 160 }, data: { kind: "start", label: "Inicio" } },
@@ -410,6 +412,7 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
               onSelectionChange={onSelectionChange}
               onPaneClick={() => setSelectedId(null)}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
               fitView
               proOptions={{ hideAttribution: true }}
               defaultEdgeOptions={{ style: { strokeWidth: 1.5 } }}
