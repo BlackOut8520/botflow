@@ -89,3 +89,12 @@ export async function deleteFlow(id: string): Promise<void> {
   await db.delete(flows).where(eq(flows.id, id))
   revalidatePath("/")
 }
+
+/** Import a flow with custom nodes and edges. */
+export async function importFlow(name: string, nodes: BotNode[], edges: BotEdge[]): Promise<FlowSummary> {
+  const id = newFlowId()
+  await db.insert(flows).values({ id, name, nodes, edges })
+  revalidatePath("/")
+  return { id, name, updatedAt: new Date().toISOString() }
+}
+
