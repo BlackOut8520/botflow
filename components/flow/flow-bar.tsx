@@ -15,7 +15,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog"
-import { Plus, Pencil, Trash2, Check, X, Loader2, CloudCheck, Cloud, Save } from "lucide-react"
+import { Plus, Pencil, Trash2, Check, X, Loader2, CloudCheck, Cloud, Save, Download, Upload } from "lucide-react"
 
 export type SaveStatus = "idle" | "saving" | "saved"
 
@@ -29,6 +29,8 @@ interface FlowBarProps {
   onRename: (name: string) => void
   onDelete: () => void
   onSave: () => void
+  onExport: () => void
+  onImport: (name: string, nodes: any[], edges: any[]) => void
 }
 
 export function FlowBar({
@@ -41,6 +43,8 @@ export function FlowBar({
   onRename,
   onDelete,
   onSave,
+  onExport,
+  onImport,
 }: FlowBarProps) {
   const active = flows.find((f) => f.id === activeFlowId) ?? null
   const [editing, setEditing] = useState(false)
@@ -56,6 +60,26 @@ export function FlowBar({
     const trimmed = draft.trim()
     if (trimmed && trimmed !== active?.name) onRename(trimmed)
     setEditing(false)
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string)
+        if (data.name && Array.isArray(data.nodes)) {
+          onImport(data.name, data.nodes, data.edges ?? [])
+        } else {
+          alert("El archivo no tiene el formato válido de Botflow.")
+        }
+      } catch (err) {
+        alert("Error al leer el archivo JSON.")
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ""
   }
 
   return (
@@ -112,6 +136,38 @@ export function FlowBar({
           >
             <Trash2 className="size-4" />
           </Button>
+
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-9"
+            onClick={onExport}
+            disabled={!active}
+            title="Exportar flujo (descargar JSON)"
+            aria-label="Exportar flujo"
+          >
+            <Download className="size-4" />
+          </Button>
+
+          <div className="relative">
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleFileChange}
+              className="hidden"
+              id="flow-import-input"
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-9"
+              onClick={() => document.getElementById("flow-import-input")?.click()}
+              title="Importar flujo (cargar JSON)"
+              aria-label="Importar flujo"
+            >
+              <Upload className="size-4" />
+            </Button>
+          </div>
 
           <div className="mx-1 h-5 w-px bg-border" aria-hidden />
 

@@ -31,6 +31,7 @@ import {
   saveFlow,
   renameFlow,
   deleteFlow,
+  importFlow,
 } from "@/app/actions/flows"
 import { SimulationContext } from "./simulation-context"
 import { BotNode as BotNodeComponent } from "./bot-node"
@@ -260,6 +261,36 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
     setSwitching(false)
   }, [activeFlowId, flows, loadFlow])
 
+  const activeFlow = useMemo(() => flows.find((f) => f.id === activeFlowId) ?? null, [flows, activeFlowId])
+
+  const handleExportFlow = useCallback(() => {
+    if (!activeFlow) return
+    const payload = {
+      name: activeFlow.name,
+      nodes,
+      edges,
+    }
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2))
+    const downloadAnchor = document.createElement("a")
+    downloadAnchor.setAttribute("href", dataStr)
+    downloadAnchor.setAttribute("download", `${activeFlow.name.replace(/\s+/g, "_")}_botflow.json`)
+    document.body.appendChild(downloadAnchor)
+    downloadAnchor.click()
+    downloadAnchor.remove()
+  }, [activeFlow, nodes, edges])
+
+  const handleImportFlow = useCallback(
+    async (name: string, importedNodes: BotNode[], importedEdges: typeof edges) => {
+      setSwitching(true)
+      const summary = await importFlow(name, importedNodes, importedEdges)
+      const flow = await getFlow(summary.id)
+      setFlows((f) => [summary, ...f])
+      if (flow) loadFlow(flow)
+      setSwitching(false)
+    },
+    [loadFlow],
+  )
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault()
@@ -340,6 +371,8 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
             onRename={handleRenameFlow}
             onDelete={handleDeleteFlow}
             onSave={handleSaveNow}
+            onExport={handleExportFlow}
+            onImport={handleImportFlow}
           />
         </header>
 
