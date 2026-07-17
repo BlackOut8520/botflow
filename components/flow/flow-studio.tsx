@@ -339,8 +339,8 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
           ...e,
           animated: active && sim.isRunning,
           style: active
-            ? { stroke: "var(--primary)", strokeWidth: 2 }
-            : { stroke: "var(--border)", strokeWidth: 1.5 },
+            ? { stroke: "var(--primary)", strokeWidth: 3 }
+            : { stroke: "var(--muted-foreground)", strokeWidth: 2.5, opacity: 0.6 },
         }
       }),
     [edges, sim.visitedNodeIds, sim.isRunning],
@@ -415,7 +415,7 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
               edgeTypes={edgeTypes}
               fitView
               proOptions={{ hideAttribution: true }}
-              defaultEdgeOptions={{ style: { strokeWidth: 1.5 } }}
+              defaultEdgeOptions={{ style: { strokeWidth: 3 } }}
             >
               <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} className="text-border" />
               <Controls className="!border-border !bg-card !shadow-sm [&_button]:!border-border [&_button]:!bg-card [&_button]:!fill-foreground [&_button:hover]:!bg-accent" />

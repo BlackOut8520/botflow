@@ -26,10 +26,10 @@ export function CustomEdge({
   return (
     <>
       {/* Área invisible más ancha para facilitar dar clic y seleccionar la línea */}
-      <BaseEdge path={edgePath} style={{ strokeWidth: 20, stroke: "transparent", cursor: "pointer" }} />
+      <BaseEdge path={edgePath} style={{ strokeWidth: 24, stroke: "transparent", cursor: "pointer" }} />
       
       {/* La línea visible real */}
-      <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} interactionWidth={0} />
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={{ ...style, strokeWidth: Math.max(Number(style?.strokeWidth) || 0, 3) }} interactionWidth={0} />
       
       {/* Botón de borrar que aparece solo cuando se selecciona la línea */}
       {selected && (
