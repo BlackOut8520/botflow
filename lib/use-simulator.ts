@@ -212,7 +212,14 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     (optionId: string, label: string) => {
       if (!awaiting || awaiting.type !== "options") return
       const nodeId = awaiting.nodeId
+      const node = getNode(nodeId)
+      const varName = node?.data.variable
       pushMessage("user", label)
+      if (varName) {
+        const nextVars = { ...varsRef.current, [varName]: label }
+        varsRef.current = nextVars
+        setVariables(nextVars)
+      }
       setAwaiting(null)
       schedule(() => advance(getTarget(nodeId, optionId)), 400)
     },
