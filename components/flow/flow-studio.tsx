@@ -41,7 +41,7 @@ import { PropertiesPanel } from "./properties-panel"
 import { Simulator } from "./simulator"
 import { FlowBar, type SaveStatus } from "./flow-bar"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Workflow } from "lucide-react"
+import { Workflow, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react"
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
@@ -102,6 +102,8 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlow?.edges ?? [])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tab, setTab] = useState<"blocks" | "props">("blocks")
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
 
   // flow management
   const [flows, setFlows] = useState<FlowSummary[]>(initialFlows)
@@ -385,26 +387,24 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
 
         <div className="flex min-h-0 flex-1">
           {/* left sidebar: blocks / properties */}
-          <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-card">
-            <Tabs value={tab} onValueChange={(v) => setTab(v as "blocks" | "props")} className="flex min-h-0 flex-1 flex-col">
-              <div className="border-b border-border px-3 pt-3">
-                <TabsList className="w-full">
-                  <TabsTrigger value="blocks" className="flex-1">
-                    Bloques
-                  </TabsTrigger>
-                  <TabsTrigger value="props" className="flex-1">
-                    Propiedades
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-              <TabsContent value="blocks" className="min-h-0 flex-1 overflow-y-auto p-3">
-                <NodePalette onAdd={addNode} />
-              </TabsContent>
-              <TabsContent value="props" className="min-h-0 flex-1 overflow-hidden p-0">
-                <PropertiesPanel node={selectedNode} onChange={updateNodeData} onDelete={deleteNode} />
-              </TabsContent>
-            </Tabs>
-          </aside>
+          {leftOpen && (
+            <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-card">
+              <Tabs value={tab} onValueChange={(v) => setTab(v as "blocks" | "props")} className="flex min-h-0 flex-1 flex-col">
+                <div className="border-b border-border px-3 pt-3">
+                  <TabsList className="w-full">
+                    <TabsTrigger value="blocks" className="flex-1">Bloques</TabsTrigger>
+                    <TabsTrigger value="props" className="flex-1">Propiedades</TabsTrigger>
+                  </TabsList>
+                </div>
+                <TabsContent value="blocks" className="min-h-0 flex-1 overflow-y-auto p-3">
+                  <NodePalette onAdd={addNode} />
+                </TabsContent>
+                <TabsContent value="props" className="min-h-0 flex-1 overflow-hidden p-0">
+                  <PropertiesPanel node={selectedNode} onChange={updateNodeData} onDelete={deleteNode} />
+                </TabsContent>
+              </Tabs>
+            </aside>
+          )}
 
           {/* center: canvas */}
           <div ref={wrapperRef} className="relative min-w-0 flex-1" onDrop={onDrop} onDragOver={onDragOver}>
@@ -432,22 +432,42 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
                 maskColor="color-mix(in oklch, var(--background) 70%, transparent)"
               />
             </ReactFlow>
+
+            {/* toggle left panel button */}
+            <button
+              onClick={() => setLeftOpen((v) => !v)}
+              title={leftOpen ? "Ocultar panel izquierdo" : "Mostrar panel izquierdo"}
+              className="absolute left-2 top-2 z-10 flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+            >
+              {leftOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+            </button>
+
+            {/* toggle right panel button */}
+            <button
+              onClick={() => setRightOpen((v) => !v)}
+              title={rightOpen ? "Ocultar simulador" : "Mostrar simulador"}
+              className="absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+            >
+              {rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+            </button>
           </div>
 
           {/* right: simulator */}
-          <aside className="flex w-96 shrink-0 flex-col border-l border-border">
-            <Simulator
-              messages={sim.messages}
-              awaiting={sim.awaiting}
-              isRunning={sim.isRunning}
-              isTyping={sim.isTyping}
-              variables={sim.variables}
-              onStart={sim.start}
-              onReset={sim.reset}
-              onChooseOption={sim.chooseOption}
-              onSubmitInput={sim.submitInput}
-            />
-          </aside>
+          {rightOpen && (
+            <aside className="flex w-96 shrink-0 flex-col border-l border-border">
+              <Simulator
+                messages={sim.messages}
+                awaiting={sim.awaiting}
+                isRunning={sim.isRunning}
+                isTyping={sim.isTyping}
+                variables={sim.variables}
+                onStart={sim.start}
+                onReset={sim.reset}
+                onChooseOption={sim.chooseOption}
+                onSubmitInput={sim.submitInput}
+              />
+            </aside>
+          )}
         </div>
       </div>
     </SimulationContext.Provider>
