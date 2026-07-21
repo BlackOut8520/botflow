@@ -62,8 +62,8 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
       <div className="px-3 py-2.5">
         <p className="text-sm font-semibold leading-tight text-card-foreground">{data.label}</p>
         {data.text && <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">{data.text}</p>}
-        {data.kind === "input" && data.variable && (
-          <p className="mt-1.5 font-mono text-[11px] text-node-input">{"→ {{"}{data.variable}{"}}"}</p>
+        {(data.kind === "input" || data.kind === "question") && data.variable && (
+          <p className="mt-1.5 font-mono text-[11px] text-node-input">{"→ {{" + data.variable + "}}"}</p>
         )}
         {data.kind === "action" && data.actionName && (
           <p className="mt-1.5 font-mono text-[11px] text-node-action">{data.actionName}</p>

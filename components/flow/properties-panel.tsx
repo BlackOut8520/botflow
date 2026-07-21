@@ -137,31 +137,46 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
         )}
 
         {kind === "question" && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Opciones</Label>
-              <Button variant="ghost" size="sm" onClick={addOption} className="h-7 gap-1 px-2 text-xs">
-                <Plus className="size-3.5" /> Añadir
-              </Button>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="question-var">Guardar opción elegida en variable</Label>
+              <Input
+                id="question-var"
+                value={node.data.variable ?? ""}
+                onChange={(e) => set({ variable: e.target.value.replace(/\s/g, "_") })}
+                placeholder="ej: opcion_elegida"
+                className="font-mono"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Opcional. El texto de la opción seleccionada se guardará en esta variable para usarla en una Condición.
+              </p>
             </div>
             <div className="space-y-2">
-              {options.map((o) => (
-                <div key={o.id} className="flex items-center gap-2">
-                  <Input value={o.label} onChange={(e) => updateOption(o.id, e.target.value)} />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeOption(o.id)}
-                    className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    aria-label="Eliminar opción"
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
-              ))}
-              {options.length === 0 && (
-                <p className="text-xs text-muted-foreground">Añade opciones para ramificar el flujo.</p>
-              )}
+              <div className="flex items-center justify-between">
+                <Label>Opciones</Label>
+                <Button variant="ghost" size="sm" onClick={addOption} className="h-7 gap-1 px-2 text-xs">
+                  <Plus className="size-3.5" /> Añadir
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {options.map((o) => (
+                  <div key={o.id} className="flex items-center gap-2">
+                    <Input value={o.label} onChange={(e) => updateOption(o.id, e.target.value)} />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeOption(o.id)}
+                      className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                      aria-label="Eliminar opción"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                ))}
+                {options.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Añade opciones para ramificar el flujo.</p>
+                )}
+              </div>
             </div>
           </div>
         )}
