@@ -189,16 +189,23 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
     (kind: NodeKind, position?: { x: number; y: number }) => {
       markDirty()
       const id = uid("n")
-      const pos = position ?? {
-        x: 200 + Math.random() * 200,
-        y: 100 + Math.random() * 200,
-      }
+      // Si no viene posición (drag & drop), calculamos el centro del lienzo visible
+      const pos = position ?? (() => {
+        const wrapper = wrapperRef.current
+        const cx = wrapper ? wrapper.clientWidth / 2 : 400
+        const cy = wrapper ? wrapper.clientHeight / 2 : 300
+        const center = screenToFlowPosition({ x: cx, y: cy })
+        return {
+          x: center.x - 128 + (Math.random() - 0.5) * 80,
+          y: center.y - 40 + (Math.random() - 0.5) * 80,
+        }
+      })()
       const node: BotNode = { id, type: "bot", position: pos, data: defaultData(kind) }
       setNodes((nds) => [...nds, node])
       setSelectedId(id)
       setTab("props")
     },
-    [setNodes, markDirty],
+    [setNodes, markDirty, screenToFlowPosition],
   )
 
   // ---- flow switching / management ----
