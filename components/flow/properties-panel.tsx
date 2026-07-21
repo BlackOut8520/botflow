@@ -302,18 +302,19 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                     </div>
                   ))}
 
-                  {isDefault ? (
-                    <p className="text-[11px] text-muted-foreground italic">Rama por defecto (siempre se ejecuta si no coincide ninguna anterior)</p>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => addRule(b.id)}
-                      className="h-7 w-full gap-1 border border-dashed border-border text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <Plus className="size-3.5" /> Añadir condición
-                    </Button>
+                  {isDefault && (
+                    <p className="text-[11px] text-muted-foreground italic">
+                      Sin condiciones = rama por defecto. Añade condiciones para que sea condicional.
+                    </p>
                   )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => addRule(b.id)}
+                    className="h-7 w-full gap-1 border border-dashed border-border text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Plus className="size-3.5" /> Añadir condición
+                  </Button>
                 </div>
               )
             })}
