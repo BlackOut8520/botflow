@@ -23,23 +23,33 @@ function interpolate(text: string, vars: Record<string, string>) {
   return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
 }
 
-function evalBranch(b: ConditionBranch, vars: Record<string, string>) {
-  const v = (vars[b.variable] ?? "").toLowerCase()
-  const target = b.value.toLowerCase()
-  switch (b.operator) {
-    case "equals":
-      return v === target
-    case "not_equals":
-      return v !== target
-    case "contains":
-      return v.includes(target)
-    case "empty":
-      return v.trim() === ""
-    case "not_empty":
-      return v.trim() !== ""
-    default:
-      return false
+function evalRule(r: Pick<ConditionRule, "variable" | "operator" | "value">, vars: Record<string, string>) {
+  const v = (vars[r.variable] ?? "").toLowerCase()
+  const target = (r.value ?? "").toLowerCase()
+  switch (r.operator) {
+    case "equals":      return v === target
+    case "not_equals":  return v !== target
+    case "contains":    return v.includes(target)
+    case "empty":       return v.trim() === ""
+    case "not_empty":   return v.trim() !== ""
+    default:            return false
   }
+}
+
+function evalBranch(b: ConditionBranch, vars: Record<string, string>): boolean {
+  // Rama por defecto: sin variable ni reglas → siempre pasa
+  if ((!b.rules || b.rules.length === 0) && !b.variable) return true
+
+  // Nuevo formato: múltiples reglas con lógica AND / OR
+  if (b.rules && b.rules.length > 0) {
+    const logic = b.logic ?? "and"
+    return logic === "and"
+      ? b.rules.every((r) => evalRule(r, vars))
+      : b.rules.some((r) => evalRule(r, vars))
+  }
+
+  // Formato heredado: una sola variable (compatibilidad hacia atrás)
+  return evalRule({ variable: b.variable ?? "", operator: b.operator ?? "equals", value: b.value ?? "" }, vars)
 }
 
 interface UseSimulatorArgs {

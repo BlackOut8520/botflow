@@ -7,12 +7,25 @@ export interface QuestionOption {
   label: string
 }
 
-export interface ConditionBranch {
+/** Una sola condición dentro de una rama */
+export interface ConditionRule {
   id: string
-  label: string
   variable: string
   operator: "equals" | "not_equals" | "contains" | "empty" | "not_empty"
   value: string
+}
+
+export interface ConditionBranch {
+  id: string
+  label: string
+  /** Cómo combinar las reglas: "and" = todas deben cumplirse, "or" = basta una */
+  logic?: "and" | "or"
+  /** Lista de condiciones a evaluar (nuevo formato) */
+  rules?: ConditionRule[]
+  /** @deprecated Campos heredados para compatibilidad con ramas antiguas */
+  variable?: string
+  operator?: "equals" | "not_equals" | "contains" | "empty" | "not_empty"
+  value?: string
 }
 
 export interface BotNodeData {
