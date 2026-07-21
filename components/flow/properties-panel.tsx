@@ -1,7 +1,7 @@
 "use client"
 
 import { Trash2, Plus, X, MousePointerClick } from "lucide-react"
-import type { BotNode, BotNodeData, ConditionBranch, QuestionOption } from "@/lib/flow-types"
+import type { BotNode, BotNodeData, ConditionBranch, ConditionRule, QuestionOption } from "@/lib/flow-types"
 import { NODE_KINDS } from "@/lib/flow-types"
 import { NODE_VISUALS } from "@/lib/node-visuals"
 import { Input } from "@/components/ui/input"
@@ -66,10 +66,28 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
     set({
       branches: [
         ...branches,
-        { id: uid("br"), label: `Rama ${branches.length + 1}`, variable: "", operator: "equals", value: "" },
-      ] as ConditionBranch[],
+        { id: uid("br"), label: `Rama ${branches.length + 1}`, logic: "and", rules: [] } as ConditionBranch,
+      ],
     })
   const removeBranch = (id: string) => set({ branches: branches.filter((b) => b.id !== id) })
+
+  // rules within a branch
+  const addRule = (branchId: string) => {
+    const branch = branches.find((b) => b.id === branchId)
+    if (!branch) return
+    const newRule: ConditionRule = { id: uid("rule"), variable: "", operator: "equals", value: "" }
+    updateBranch(branchId, { rules: [...(branch.rules ?? []), newRule] })
+  }
+  const updateRule = (branchId: string, ruleId: string, patch: Partial<ConditionRule>) => {
+    const branch = branches.find((b) => b.id === branchId)
+    if (!branch) return
+    updateBranch(branchId, { rules: (branch.rules ?? []).map((r) => (r.id === ruleId ? { ...r, ...patch } : r)) })
+  }
+  const removeRule = (branchId: string, ruleId: string) => {
+    const branch = branches.find((b) => b.id === branchId)
+    if (!branch) return
+    updateBranch(branchId, { rules: (branch.rules ?? []).filter((r) => r.id !== ruleId) })
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -186,60 +204,121 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
             <div className="flex items-center justify-between">
               <Label>Ramas condicionales</Label>
               <Button variant="ghost" size="sm" onClick={addBranch} className="h-7 gap-1 px-2 text-xs">
-                <Plus className="size-3.5" /> Añadir
+                <Plus className="size-3.5" /> Añadir rama
               </Button>
             </div>
-            {branches.map((b) => (
-              <div key={b.id} className="space-y-2 rounded-lg border border-border bg-muted/30 p-2.5">
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={b.label}
-                    onChange={(e) => updateBranch(b.id, { label: e.target.value })}
-                    placeholder="Etiqueta de la rama"
-                    className="h-8"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeBranch(b.id)}
-                    className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    aria-label="Eliminar rama"
-                  >
-                    <X className="size-4" />
-                  </Button>
+            {branches.map((b) => {
+              const rules = b.rules ?? []
+              const isDefault = rules.length === 0 && !b.variable
+              return (
+                <div key={b.id} className="space-y-2 rounded-lg border border-border bg-muted/30 p-2.5">
+                  {/* Cabecera de la rama */}
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={b.label}
+                      onChange={(e) => updateBranch(b.id, { label: e.target.value })}
+                      placeholder="Etiqueta de la rama"
+                      className="h-8"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeBranch(b.id)}
+                      className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                      aria-label="Eliminar rama"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+
+                  {/* Lógica AND / OR (solo si hay más de una regla o se pueden agregar) */}
+                  {!isDefault && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">Lógica:</span>
+                      <Select
+                        value={b.logic ?? "and"}
+                        onValueChange={(v) => updateBranch(b.id, { logic: v as "and" | "or" })}
+                      >
+                        <SelectTrigger size="sm" className="h-7 w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="and">AND (todas)</SelectItem>
+                          <SelectItem value="or">OR (alguna)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-[10px] text-muted-foreground">
+                        {(b.logic ?? "and") === "and" ? "Todas deben cumplirse" : "Basta con una"}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Reglas de la rama */}
+                  {rules.map((r, idx) => (
+                    <div key={r.id} className="space-y-1 rounded-md border border-border/60 bg-background/50 p-2">
+                      {idx > 0 && (
+                        <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+                          {(b.logic ?? "and") === "and" ? "Y además" : "O bien"}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={r.variable}
+                          onChange={(e) => updateRule(b.id, r.id, { variable: e.target.value.replace(/\s/g, "_") })}
+                          placeholder="variable"
+                          className="h-7 flex-1 font-mono text-xs"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeRule(b.id, r.id)}
+                          className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
+                          aria-label="Eliminar condición"
+                        >
+                          <X className="size-3.5" />
+                        </Button>
+                      </div>
+                      <Select
+                        value={r.operator}
+                        onValueChange={(v) => updateRule(b.id, r.id, { operator: v as ConditionRule["operator"] })}
+                      >
+                        <SelectTrigger size="sm" className="h-7 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {OPERATORS.map((op) => (
+                            <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {r.operator !== "empty" && r.operator !== "not_empty" && (
+                        <Input
+                          value={r.value}
+                          onChange={(e) => updateRule(b.id, r.id, { value: e.target.value })}
+                          placeholder="valor a comparar"
+                          className="h-7 text-xs"
+                        />
+                      )}
+                    </div>
+                  ))}
+
+                  {isDefault ? (
+                    <p className="text-[11px] text-muted-foreground italic">Rama por defecto (siempre se ejecuta si no coincide ninguna anterior)</p>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => addRule(b.id)}
+                      className="h-7 w-full gap-1 border border-dashed border-border text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <Plus className="size-3.5" /> Añadir condición
+                    </Button>
+                  )}
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    value={b.variable}
-                    onChange={(e) => updateBranch(b.id, { variable: e.target.value.replace(/\s/g, "_") })}
-                    placeholder="variable"
-                    className="h-8 flex-1 font-mono text-xs"
-                  />
-                  <Select value={b.operator} onValueChange={(v) => updateBranch(b.id, { operator: v as ConditionBranch["operator"] })}>
-                    <SelectTrigger size="sm" className="h-8 w-36 shrink-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {OPERATORS.map((op) => (
-                        <SelectItem key={op.value} value={op.value}>
-                          {op.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {b.operator !== "empty" && b.operator !== "not_empty" && (
-                  <Input
-                    value={b.value}
-                    onChange={(e) => updateBranch(b.id, { value: e.target.value })}
-                    placeholder="valor a comparar"
-                    className="h-8 text-xs"
-                  />
-                )}
-              </div>
-            ))}
+              )
+            })}
             <p className="text-[11px] text-muted-foreground">
-              Las ramas se evalúan en orden. Añade una rama sin variable como caso por defecto.
+              Las ramas se evalúan en orden. Añade una rama sin condiciones como caso por defecto.
             </p>
           </div>
         )}
