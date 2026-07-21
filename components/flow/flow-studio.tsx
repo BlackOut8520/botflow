@@ -330,20 +330,22 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNodeId])
 
-  // colorize edges of active path
+  // colorize edges by source node kind (and highlight active path)
   const styledEdges = useMemo(
     () =>
       edges.map((e) => {
         const active = sim.visitedNodeIds.has(e.source) && sim.visitedNodeIds.has(e.target)
+        const sourceNode = nodes.find((n) => n.id === e.source)
+        const sourceColor = sourceNode ? NODE_VAR[sourceNode.data.kind] : "var(--muted-foreground)"
         return {
           ...e,
           animated: active && sim.isRunning,
           style: active
             ? { stroke: "var(--primary)", strokeWidth: 3 }
-            : { stroke: "var(--muted-foreground)", strokeWidth: 2.5, opacity: 0.6 },
+            : { stroke: sourceColor, strokeWidth: 2.5, opacity: 0.75 },
         }
       }),
-    [edges, sim.visitedNodeIds, sim.isRunning],
+    [edges, nodes, sim.visitedNodeIds, sim.isRunning],
   )
 
   const simContextValue = useMemo(
