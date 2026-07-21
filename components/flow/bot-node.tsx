@@ -16,7 +16,7 @@ const handleStyle = (color: string): React.CSSProperties => ({
 })
 
 function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
-  const { activeNodeId, visitedNodeIds } = useSimulation()
+  const { activeNodeId, visitedNodeIds, isRunning } = useSimulation()
   const visual = NODE_VISUALS[data.kind]
   const meta = NODE_KINDS[data.kind]
   const Icon = visual.icon
@@ -24,6 +24,8 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
 
   const isActive = activeNodeId === id
   const isVisited = visitedNodeIds.has(id) && !isActive
+  // sim ended and this node was part of the path
+  const isPathEnd = !isRunning && isVisited && visitedNodeIds.size > 0
 
   // determine outgoing handles
   const isMulti = data.kind === "question" || data.kind === "condition"
@@ -41,9 +43,16 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
         "relative min-w-52 max-w-64 rounded-xl border bg-card shadow-sm transition-all",
         selected ? "border-primary ring-2 ring-primary/40" : "border-border",
         isActive && "ring-2 ring-primary shadow-lg scale-[1.03]",
-        isVisited && "opacity-90",
+        isPathEnd && "opacity-100",
+        isVisited && isRunning && "opacity-80",
       )}
-      style={isActive ? { borderColor: color, boxShadow: `0 0 0 3px ${color}55` } : undefined}
+      style={
+        isActive
+          ? { borderColor: color, boxShadow: `0 0 0 3px ${color}55` }
+          : isPathEnd
+          ? { borderColor: color, boxShadow: `0 0 0 2px ${color}44` }
+          : undefined
+      }
     >
       {hasTarget && <Handle type="target" position={Position.Left} style={handleStyle(color)} />}
 
@@ -56,6 +65,9 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
           <span className="ml-auto flex size-2 rounded-full bg-primary">
             <span className="size-2 animate-ping rounded-full bg-primary" />
           </span>
+        )}
+        {isPathEnd && (
+          <span className="ml-auto text-[10px] font-semibold" style={{ color }}>✓</span>
         )}
       </div>
 
