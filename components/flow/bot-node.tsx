@@ -1,6 +1,7 @@
 "use client"
 
 import { memo } from "react"
+import { Play } from "lucide-react"
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import type { BotNode as BotNodeType } from "@/lib/flow-types"
 import { NODE_KINDS } from "@/lib/flow-types"
@@ -16,7 +17,7 @@ const handleStyle = (color: string): React.CSSProperties => ({
 })
 
 function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
-  const { activeNodeId, visitedNodeIds, isRunning } = useSimulation()
+  const { activeNodeId, visitedNodeIds, isRunning, startFrom } = useSimulation()
   const visual = NODE_VISUALS[data.kind]
   const meta = NODE_KINDS[data.kind]
   const Icon = visual.icon
@@ -42,7 +43,7 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
   return (
     <div
       className={cn(
-        "relative min-w-52 max-w-64 rounded-xl border bg-card shadow-sm transition-all",
+        "group relative min-w-52 max-w-64 rounded-xl border bg-card shadow-sm transition-all",
         selected ? "border-primary ring-2 ring-primary/40" : "border-border",
         isActive && "ring-2 ring-primary shadow-lg scale-[1.03]",
         isPathEnd && "opacity-100",
@@ -56,6 +57,15 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
           : undefined
       }
     >
+      {/* play button: visible on hover, starts simulation from this node */}
+      <button
+        onClick={(e) => { e.stopPropagation(); startFrom(id) }}
+        title="Simular desde aquí"
+        className="absolute -right-2.5 -top-2.5 z-20 hidden size-6 items-center justify-center rounded-full border-2 border-background shadow-md group-hover:flex"
+        style={{ background: color }}
+      >
+        <Play className="size-3 fill-white text-white" />
+      </button>
       {hasTarget && <Handle type="target" position={Position.Left} style={handleStyle(color)} />}
 
       <div className="flex items-center gap-2 rounded-t-xl border-b border-border/60 px-3 py-2">

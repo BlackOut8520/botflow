@@ -370,8 +370,13 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
   )
 
   const simContextValue = useMemo(
-    () => ({ activeNodeId: sim.activeNodeId, visitedNodeIds: sim.visitedNodeIds, isRunning: sim.isRunning }),
-    [sim.activeNodeId, sim.visitedNodeIds, sim.isRunning],
+    () => ({
+      activeNodeId: sim.activeNodeId,
+      visitedNodeIds: sim.visitedNodeIds,
+      isRunning: sim.isRunning,
+      startFrom: sim.startFrom,
+    }),
+    [sim.activeNodeId, sim.visitedNodeIds, sim.isRunning, sim.startFrom],
   )
 
   return (
