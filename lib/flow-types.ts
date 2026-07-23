@@ -5,6 +5,9 @@ export type NodeKind = "start" | "message" | "question" | "input" | "condition" 
 export interface QuestionOption {
   id: string
   label: string
+  /** Si se define, la opción solo aparece cuando el mes actual está en el rango */
+  startMonth?: number  // 1-12
+  endMonth?: number    // 1-12
 }
 
 /** Una sola condición dentro de una rama */

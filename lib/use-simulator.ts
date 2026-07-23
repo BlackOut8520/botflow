@@ -140,10 +140,22 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         schedule(() => {
           setIsTyping(false)
           if (data.text) pushMessage("bot", interpolate(data.text, varsRef.current))
+          const month = simulatedMonth
+          const visibleOptions = (data.options ?? []).filter((o) => {
+            if (!o.startMonth || !o.endMonth) return true // sin restricción → siempre visible
+            if (o.startMonth <= o.endMonth) return month >= o.startMonth && month <= o.endMonth
+            return month >= o.startMonth || month <= o.endMonth // rango que cruza año
+          })
+          if (visibleOptions.length === 0) {
+            pushMessage("system", "Ninguna opción disponible para este periodo. Fin del recorrido.")
+            setIsRunning(false)
+            setActiveNodeId(null)
+            return
+          }
           setAwaiting({
             type: "options",
             nodeId,
-            options: (data.options ?? []).map((o) => ({ id: o.id, label: o.label })),
+            options: visibleOptions.map((o) => ({ id: o.id, label: o.label })),
           })
         }, 700)
         break
