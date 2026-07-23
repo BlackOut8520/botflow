@@ -243,6 +243,24 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     setIsTyping(false)
   }, [])
 
+  const startFrom = useCallback((nodeId: string) => {
+    clearTimers()
+    counter = 0
+    varsRef.current = {}
+    setVariables({})
+    setMessages([])
+    setVisitedNodeIds(new Set())
+    setAwaiting(null)
+    setIsTyping(false)
+    setIsRunning(true)
+    const node = nodesRef.current.find((n) => n.id === nodeId)
+    const nodeLabel = node?.data.label ?? nodeId
+    schedule(() => {
+      pushMessage("system", `Simulación iniciada desde: ${nodeLabel}`)
+      advance(nodeId)
+    }, 100)
+  }, [advance])
+
   const chooseOption = useCallback(
     (optionId: string, label: string) => {
       if (!awaiting || awaiting.type !== "options") return
@@ -293,6 +311,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     setSimulatedMonth,
     start,
     reset,
+    startFrom,
     chooseOption,
     submitInput,
   }
