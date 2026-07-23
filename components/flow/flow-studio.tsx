@@ -78,8 +78,8 @@ function defaultData(kind: NodeKind): BotNodeData {
         kind,
         label,
         dateBranches: [
-          { id: uid("db"), label: "Enero – Junio", startMonth: 1, endMonth: 6 },
-          { id: uid("db"), label: "Julio – Diciembre", startMonth: 7, endMonth: 12 },
+          { id: uid("db"), label: "Enero – Junio", startDay: 1, startMonth: 1, endDay: 30, endMonth: 6 },
+          { id: uid("db"), label: "Julio – Diciembre", startDay: 1, startMonth: 7, endDay: 31, endMonth: 12 },
         ],
       }
     case "action":
@@ -482,7 +482,9 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
                 isRunning={sim.isRunning}
                 isTyping={sim.isTyping}
                 variables={sim.variables}
+                simulatedDay={sim.simulatedDay}
                 simulatedMonth={sim.simulatedMonth}
+                onSimulatedDayChange={sim.setSimulatedDay}
                 onSimulatedMonthChange={sim.setSimulatedMonth}
                 onStart={sim.start}
                 onReset={sim.reset}

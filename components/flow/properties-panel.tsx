@@ -52,8 +52,8 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
 
   // question options
   const options = node.data.options ?? []
-  const updateOption = (id: string, label: string, startMonth?: number, endMonth?: number) =>
-    set({ options: options.map((o) => (o.id === id ? { ...o, label, startMonth, endMonth } : o)) })
+  const updateOption = (id: string, label: string, startDay?: number, startMonth?: number, endDay?: number, endMonth?: number) =>
+    set({ options: options.map((o) => (o.id === id ? { ...o, label, startDay, startMonth, endDay, endMonth } : o)) })
   const addOption = () =>
     set({ options: [...options, { id: uid("opt"), label: `Opción ${options.length + 1}` }] as QuestionOption[] })
   const removeOption = (id: string) => set({ options: options.filter((o) => o.id !== id) })
@@ -203,14 +203,16 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                           <X className="size-4" />
                         </Button>
                       </div>
-                      {/* Rango de meses opcional */}
+                      {/* Rango de fechas opcional */}
                       <div className="space-y-1">
                         <div className="flex items-center gap-1.5">
                           <input
                             type="checkbox"
                             id={`opt-date-${o.id}`}
                             checked={!!o.startMonth}
-                            onChange={(e) => updateOption(o.id, o.label, e.target.checked ? 1 : undefined, e.target.checked ? 12 : undefined)}
+                            onChange={(e) => updateOption(o.id, o.label,
+                              e.target.checked ? 1 : undefined, e.target.checked ? 1 : undefined,
+                              e.target.checked ? 31 : undefined, e.target.checked ? 12 : undefined)}
                             className="size-3.5 accent-primary"
                           />
                           <label htmlFor={`opt-date-${o.id}`} className="text-[11px] text-muted-foreground cursor-pointer select-none">
@@ -218,23 +220,27 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                           </label>
                         </div>
                         {o.startMonth && (
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            <div className="space-y-1">
-                              <Label className="text-[10px]">Desde</Label>
-                              <Select value={String(o.startMonth)} onValueChange={(v) => updateOption(o.id, o.label, Number(v), o.endMonth)}>
-                                <SelectTrigger size="sm" className="h-7"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
-                                </SelectContent>
+                          <div className="space-y-1.5 pt-1">
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-[10px] w-10 shrink-0">Desde</Label>
+                              <input type="number" min={1} max={31} value={o.startDay ?? 1}
+                                onChange={(e) => updateOption(o.id, o.label, Number(e.target.value), o.startMonth, o.endDay, o.endMonth)}
+                                className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                              <Select value={String(o.startMonth)} onValueChange={(v) => updateOption(o.id, o.label, o.startDay, Number(v), o.endDay, o.endMonth)}>
+                                <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
+                                <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                               </Select>
                             </div>
-                            <div className="space-y-1">
-                              <Label className="text-[10px]">Hasta</Label>
-                              <Select value={String(o.endMonth ?? 12)} onValueChange={(v) => updateOption(o.id, o.label, o.startMonth, Number(v))}>
-                                <SelectTrigger size="sm" className="h-7"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
-                                </SelectContent>
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-[10px] w-10 shrink-0">Hasta</Label>
+                              <input type="number" min={1} max={31} value={o.endDay ?? 31}
+                                onChange={(e) => updateOption(o.id, o.label, o.startDay, o.startMonth, Number(e.target.value), o.endMonth)}
+                                className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                              <Select value={String(o.endMonth ?? 12)} onValueChange={(v) => updateOption(o.id, o.label, o.startDay, o.startMonth, o.endDay, Number(v))}>
+                                <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
+                                <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                               </Select>
                             </div>
                           </div>
@@ -387,7 +393,7 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
           const updateDB = (id: string, patch: Partial<DateBranch>) =>
             set({ dateBranches: dateBranches.map((b) => (b.id === id ? { ...b, ...patch } : b)) })
           const addDB = () =>
-            set({ dateBranches: [...dateBranches, { id: uid("db"), label: `Periodo ${dateBranches.length + 1}`, startMonth: 1, endMonth: 12 }] })
+            set({ dateBranches: [...dateBranches, { id: uid("db"), label: `Periodo ${dateBranches.length + 1}`, startDay: 1, startMonth: 1, endDay: 31, endMonth: 12 }] })
           const removeDB = (id: string) => set({ dateBranches: dateBranches.filter((b) => b.id !== id) })
           return (
             <div className="space-y-3">
@@ -417,27 +423,27 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                       <X className="size-4" />
                     </Button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[11px]">Desde</Label>
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-[10px] w-10 shrink-0">Desde</Label>
+                      <input type="number" min={1} max={31} value={b.startDay ?? 1}
+                        onChange={(e) => updateDB(b.id, { startDay: Number(e.target.value) })}
+                        className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
                       <Select value={String(b.startMonth)} onValueChange={(v) => updateDB(b.id, { startMonth: Number(v) })}>
-                        <SelectTrigger size="sm" className="h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
-                        </SelectContent>
+                        <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px]">Hasta</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-[10px] w-10 shrink-0">Hasta</Label>
+                      <input type="number" min={1} max={31} value={b.endDay ?? 31}
+                        onChange={(e) => updateDB(b.id, { endDay: Number(e.target.value) })}
+                        className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
                       <Select value={String(b.endMonth)} onValueChange={(v) => updateDB(b.id, { endMonth: Number(v) })}>
-                        <SelectTrigger size="sm" className="h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
-                        </SelectContent>
+                        <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                   </div>

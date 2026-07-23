@@ -6,12 +6,14 @@ interface SimulationState {
   activeNodeId: string | null
   visitedNodeIds: Set<string>
   isRunning: boolean
+  startFrom: (nodeId: string) => void
 }
 
 export const SimulationContext = createContext<SimulationState>({
   activeNodeId: null,
   visitedNodeIds: new Set(),
   isRunning: false,
+  startFrom: () => {},
 })
 
 export function useSimulation() {

@@ -14,7 +14,9 @@ interface SimulatorProps {
   isRunning: boolean
   isTyping: boolean
   variables: Record<string, string>
+  simulatedDay: number
   simulatedMonth: number
+  onSimulatedDayChange: (day: number) => void
   onSimulatedMonthChange: (month: number) => void
   onStart: () => void
   onReset: () => void
@@ -28,7 +30,9 @@ export function Simulator({
   isRunning,
   isTyping,
   variables,
+  simulatedDay,
   simulatedMonth,
+  onSimulatedDayChange,
   onSimulatedMonthChange,
   onStart,
   onReset,
@@ -76,9 +80,17 @@ export function Simulator({
         </div>
       </div>
 
-      {/* month selector for date testing */}
+      {/* date selector for testing */}
       <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-4 py-2">
-        <span className="text-[11px] font-medium text-muted-foreground shrink-0">Simular mes:</span>
+        <span className="text-[11px] font-medium text-muted-foreground shrink-0">Simular fecha:</span>
+        <input
+          type="number"
+          min={1} max={31}
+          value={simulatedDay}
+          onChange={(e) => onSimulatedDayChange(Math.min(31, Math.max(1, Number(e.target.value))))}
+          className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <span className="text-[11px] text-muted-foreground">de</span>
         <select
           value={simulatedMonth}
           onChange={(e) => onSimulatedMonthChange(Number(e.target.value))}
