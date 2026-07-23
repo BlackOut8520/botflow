@@ -1,4 +1,4 @@
-import { Play, MessageSquare, ListChecks, TextCursorInput, GitBranch, Zap, Flag } from "lucide-react"
+import { Play, MessageSquare, ListChecks, TextCursorInput, GitBranch, Calendar, Zap, Flag } from "lucide-react"
 import type { NodeKind } from "./flow-types"
 
 export interface NodeVisual {
@@ -15,6 +15,7 @@ export const NODE_VISUALS: Record<NodeKind, NodeVisual> = {
   question: { icon: ListChecks, color: "text-node-question", tint: "bg-node-question/10" },
   input: { icon: TextCursorInput, color: "text-node-input", tint: "bg-node-input/10" },
   condition: { icon: GitBranch, color: "text-node-condition", tint: "bg-node-condition/10" },
+  date_condition: { icon: Calendar, color: "text-node-question", tint: "bg-node-question/10" },
   action: { icon: Zap, color: "text-node-action", tint: "bg-node-action/10" },
   end: { icon: Flag, color: "text-node-end", tint: "bg-node-end/10" },
 }
@@ -26,6 +27,7 @@ export const NODE_VAR: Record<NodeKind, string> = {
   question: "var(--node-question)",
   input: "var(--node-input)",
   condition: "var(--node-condition)",
+  date_condition: "var(--node-question)",
   action: "var(--node-action)",
   end: "var(--node-end)",
 }

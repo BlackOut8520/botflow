@@ -65,6 +65,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
   const [awaiting, setAwaiting] = useState<AwaitingState | null>(null)
   const [variables, setVariables] = useState<Record<string, string>>({})
   const [isTyping, setIsTyping] = useState(false)
+  const [simulatedMonth, setSimulatedMonth] = useState<number>(new Date().getMonth() + 1)
 
   // keep latest graph + vars in refs so scheduled callbacks stay fresh
   const nodesRef = useRef(nodes)
@@ -172,6 +173,30 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         }, 700)
         break
       }
+      case "date_condition": {
+        const MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
+        const currentMonth = simulatedMonth // usa el mes simulado en vez del real
+        pushMessage("system", `Verificando fecha: ${MONTH_NAMES[currentMonth - 1]} (mes ${currentMonth})`)
+        schedule(() => {
+          const dateBranches = data.dateBranches ?? []
+          const match = dateBranches.find((b) => {
+            if (b.startMonth <= b.endMonth) {
+              return currentMonth >= b.startMonth && currentMonth <= b.endMonth
+            }
+            // rango que cruza año (ej. Nov–Feb)
+            return currentMonth >= b.startMonth || currentMonth <= b.endMonth
+          })
+          if (match) {
+            pushMessage("system", `Periodo activo: ${match.label}`)
+            advance(getTarget(nodeId, match.id))
+          } else {
+            pushMessage("system", "Ningún periodo de fecha coincide con el mes actual.")
+            setIsRunning(false)
+            setActiveNodeId(null)
+          }
+        }, 700)
+        break
+      }
       case "action": {
         pushMessage("system", `Ejecutando acción: ${data.actionName || data.label}`)
         schedule(() => {
@@ -264,6 +289,8 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     awaiting,
     variables,
     isTyping,
+    simulatedMonth,
+    setSimulatedMonth,
     start,
     reset,
     chooseOption,

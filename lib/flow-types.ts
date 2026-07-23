@@ -1,6 +1,6 @@
 import type { Node, Edge } from "@xyflow/react"
 
-export type NodeKind = "start" | "message" | "question" | "input" | "condition" | "action" | "end"
+export type NodeKind = "start" | "message" | "question" | "input" | "condition" | "date_condition" | "action" | "end"
 
 export interface QuestionOption {
   id: string
@@ -28,6 +28,14 @@ export interface ConditionBranch {
   value?: string
 }
 
+/** Rama de condición de fecha: se activa si el mes actual está dentro del rango */
+export interface DateBranch {
+  id: string
+  label: string
+  startMonth: number  // 1-12
+  endMonth: number    // 1-12
+}
+
 export interface BotNodeData {
   kind: NodeKind
   label: string
@@ -40,6 +48,8 @@ export interface BotNodeData {
   placeholder?: string
   // condition branches
   branches?: ConditionBranch[]
+  // date condition branches
+  dateBranches?: DateBranch[]
   // action / api
   actionName?: string
   actionDetail?: string
@@ -78,6 +88,12 @@ export const NODE_KINDS: Record<NodeKind, NodeKindMeta> = {
     description: "Ramifica según el valor de una variable",
     outputs: -1,
   },
+  date_condition: {
+    kind: "date_condition",
+    title: "Condición de Fecha",
+    description: "Ramifica automáticamente según el mes del año",
+    outputs: -1,
+  },
   action: {
     kind: "action",
     title: "Acción / API",
@@ -88,4 +104,4 @@ export const NODE_KINDS: Record<NodeKind, NodeKindMeta> = {
 }
 
 /** The list of kinds the user can drag/add (start is unique and pre-placed). */
-export const ADDABLE_KINDS: NodeKind[] = ["message", "question", "input", "condition", "action", "end"]
+export const ADDABLE_KINDS: NodeKind[] = ["message", "question", "input", "condition", "date_condition", "action", "end"]
