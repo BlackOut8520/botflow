@@ -5,8 +5,10 @@ export type NodeKind = "start" | "message" | "question" | "input" | "condition" 
 export interface QuestionOption {
   id: string
   label: string
-  /** Si se define, la opción solo aparece cuando el mes actual está en el rango */
+  /** Si se define, la opción solo aparece cuando la fecha actual está en el rango */
+  startDay?: number    // 1-31
   startMonth?: number  // 1-12
+  endDay?: number      // 1-31
   endMonth?: number    // 1-12
 }
 
@@ -31,11 +33,13 @@ export interface ConditionBranch {
   value?: string
 }
 
-/** Rama de condición de fecha: se activa si el mes actual está dentro del rango */
+/** Rama de condición de fecha: se activa si la fecha actual está dentro del rango */
 export interface DateBranch {
   id: string
   label: string
+  startDay: number    // 1-31
   startMonth: number  // 1-12
+  endDay: number      // 1-31
   endMonth: number    // 1-12
 }
 

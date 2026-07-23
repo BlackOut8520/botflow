@@ -65,7 +65,9 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
   const [awaiting, setAwaiting] = useState<AwaitingState | null>(null)
   const [variables, setVariables] = useState<Record<string, string>>({})
   const [isTyping, setIsTyping] = useState(false)
-  const [simulatedMonth, setSimulatedMonth] = useState<number>(new Date().getMonth() + 1)
+  const now = new Date()
+  const [simulatedDay, setSimulatedDay] = useState<number>(now.getDate())
+  const [simulatedMonth, setSimulatedMonth] = useState<number>(now.getMonth() + 1)
 
   // keep latest graph + vars in refs so scheduled callbacks stay fresh
   const nodesRef = useRef(nodes)
@@ -140,11 +142,14 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         schedule(() => {
           setIsTyping(false)
           if (data.text) pushMessage("bot", interpolate(data.text, varsRef.current))
-          const month = simulatedMonth
+          const cd = simulatedDay, cm = simulatedMonth
+          const cur = cm * 100 + cd
           const visibleOptions = (data.options ?? []).filter((o) => {
-            if (!o.startMonth || !o.endMonth) return true // sin restricción → siempre visible
-            if (o.startMonth <= o.endMonth) return month >= o.startMonth && month <= o.endMonth
-            return month >= o.startMonth || month <= o.endMonth // rango que cruza año
+            if (!o.startMonth || !o.endMonth) return true
+            const s = o.startMonth * 100 + (o.startDay ?? 1)
+            const e = o.endMonth * 100 + (o.endDay ?? 31)
+            if (s <= e) return cur >= s && cur <= e
+            return cur >= s || cur <= e
           })
           if (visibleOptions.length === 0) {
             pushMessage("system", "Ninguna opción disponible para este periodo. Fin del recorrido.")
@@ -152,11 +157,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
             setActiveNodeId(null)
             return
           }
-          setAwaiting({
-            type: "options",
-            nodeId,
-            options: visibleOptions.map((o) => ({ id: o.id, label: o.label })),
-          })
+          setAwaiting({ type: "options", nodeId, options: visibleOptions.map((o) => ({ id: o.id, label: o.label })) })
         }, 700)
         break
       }
@@ -187,22 +188,22 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
       }
       case "date_condition": {
         const MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
-        const currentMonth = simulatedMonth // usa el mes simulado en vez del real
-        pushMessage("system", `Verificando fecha: ${MONTH_NAMES[currentMonth - 1]} (mes ${currentMonth})`)
+        const cd = simulatedDay, cm = simulatedMonth
+        const cur = cm * 100 + cd
+        pushMessage("system", `Verificando fecha: ${cd} de ${MONTH_NAMES[cm - 1]}`)
         schedule(() => {
           const dateBranches = data.dateBranches ?? []
           const match = dateBranches.find((b) => {
-            if (b.startMonth <= b.endMonth) {
-              return currentMonth >= b.startMonth && currentMonth <= b.endMonth
-            }
-            // rango que cruza año (ej. Nov–Feb)
-            return currentMonth >= b.startMonth || currentMonth <= b.endMonth
+            const s = b.startMonth * 100 + (b.startDay ?? 1)
+            const e = b.endMonth * 100 + (b.endDay ?? 31)
+            if (s <= e) return cur >= s && cur <= e
+            return cur >= s || cur <= e
           })
           if (match) {
             pushMessage("system", `Periodo activo: ${match.label}`)
             advance(getTarget(nodeId, match.id))
           } else {
-            pushMessage("system", "Ningún periodo de fecha coincide con el mes actual.")
+            pushMessage("system", "Ningún periodo de fecha coincide con la fecha simulada.")
             setIsRunning(false)
             setActiveNodeId(null)
           }
@@ -319,7 +320,9 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     awaiting,
     variables,
     isTyping,
+    simulatedDay,
     simulatedMonth,
+    setSimulatedDay,
     setSimulatedMonth,
     start,
     reset,
