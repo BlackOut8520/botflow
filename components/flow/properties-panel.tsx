@@ -52,8 +52,8 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
 
   // question options
   const options = node.data.options ?? []
-  const updateOption = (id: string, label: string) =>
-    set({ options: options.map((o) => (o.id === id ? { ...o, label } : o)) })
+  const updateOption = (id: string, label: string, startMonth?: number, endMonth?: number) =>
+    set({ options: options.map((o) => (o.id === id ? { ...o, label, startMonth, endMonth } : o)) })
   const addOption = () =>
     set({ options: [...options, { id: uid("opt"), label: `Opción ${options.length + 1}` }] as QuestionOption[] })
   const removeOption = (id: string) => set({ options: options.filter((o) => o.id !== id) })
@@ -177,20 +177,72 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                 </Button>
               </div>
               <div className="space-y-2">
-                {options.map((o) => (
-                  <div key={o.id} className="flex items-center gap-2">
-                    <Input value={o.label} onChange={(e) => updateOption(o.id, e.target.value)} />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeOption(o.id)}
-                      className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
-                      aria-label="Eliminar opción"
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </div>
-                ))}
+                {(() => {
+                  const MONTHS = [
+                    { value: 1, label: "Ene" }, { value: 2, label: "Feb" }, { value: 3, label: "Mar" },
+                    { value: 4, label: "Abr" }, { value: 5, label: "May" }, { value: 6, label: "Jun" },
+                    { value: 7, label: "Jul" }, { value: 8, label: "Ago" }, { value: 9, label: "Sep" },
+                    { value: 10, label: "Oct" }, { value: 11, label: "Nov" }, { value: 12, label: "Dic" },
+                  ]
+                  return options.map((o) => (
+                    <div key={o.id} className="rounded-lg border border-border bg-muted/20 p-2 space-y-2">
+                      {/* Etiqueta + botón borrar */}
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={o.label}
+                          onChange={(e) => updateOption(o.id, e.target.value)}
+                          className="h-8"
+                          placeholder="Texto de la opción"
+                        />
+                        <Button
+                          variant="ghost" size="icon"
+                          onClick={() => removeOption(o.id)}
+                          className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                          aria-label="Eliminar opción"
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                      {/* Rango de meses opcional */}
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            id={`opt-date-${o.id}`}
+                            checked={!!o.startMonth}
+                            onChange={(e) => updateOption(o.id, o.label, e.target.checked ? 1 : undefined, e.target.checked ? 12 : undefined)}
+                            className="size-3.5 accent-primary"
+                          />
+                          <label htmlFor={`opt-date-${o.id}`} className="text-[11px] text-muted-foreground cursor-pointer select-none">
+                            Restringir por periodo
+                          </label>
+                        </div>
+                        {o.startMonth && (
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">Desde</Label>
+                              <Select value={String(o.startMonth)} onValueChange={(v) => updateOption(o.id, o.label, Number(v), o.endMonth)}>
+                                <SelectTrigger size="sm" className="h-7"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">Hasta</Label>
+                              <Select value={String(o.endMonth ?? 12)} onValueChange={(v) => updateOption(o.id, o.label, o.startMonth, Number(v))}>
+                                <SelectTrigger size="sm" className="h-7"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                })()}
                 {options.length === 0 && (
                   <p className="text-xs text-muted-foreground">Añade opciones para ramificar el flujo.</p>
                 )}
