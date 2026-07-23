@@ -73,6 +73,15 @@ function defaultData(kind: NodeKind): BotNodeData {
           { id: uid("br"), label: "Por defecto", variable: "", operator: "equals", value: "" },
         ],
       }
+    case "date_condition":
+      return {
+        kind,
+        label,
+        dateBranches: [
+          { id: uid("db"), label: "Enero – Junio", startMonth: 1, endMonth: 6 },
+          { id: uid("db"), label: "Julio – Diciembre", startMonth: 7, endMonth: 12 },
+        ],
+      }
     case "action":
       return { kind, label, actionName: "POST /api/endpoint", actionDetail: "Describe la acción a simular." }
     default:
@@ -468,6 +477,8 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
                 isRunning={sim.isRunning}
                 isTyping={sim.isTyping}
                 variables={sim.variables}
+                simulatedMonth={sim.simulatedMonth}
+                onSimulatedMonthChange={sim.setSimulatedMonth}
                 onStart={sim.start}
                 onReset={sim.reset}
                 onChooseOption={sim.chooseOption}

@@ -1,7 +1,7 @@
 "use client"
 
 import { Trash2, Plus, X, MousePointerClick } from "lucide-react"
-import type { BotNode, BotNodeData, ConditionBranch, ConditionRule, QuestionOption } from "@/lib/flow-types"
+import type { BotNode, BotNodeData, ConditionBranch, ConditionRule, DateBranch, QuestionOption } from "@/lib/flow-types"
 import { NODE_KINDS } from "@/lib/flow-types"
 import { NODE_VISUALS } from "@/lib/node-visuals"
 import { Input } from "@/components/ui/input"
@@ -323,6 +323,77 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
             </p>
           </div>
         )}
+
+        {kind === "date_condition" && (() => {
+          const MONTHS = [
+            { value: 1, label: "Enero" }, { value: 2, label: "Febrero" }, { value: 3, label: "Marzo" },
+            { value: 4, label: "Abril" }, { value: 5, label: "Mayo" }, { value: 6, label: "Junio" },
+            { value: 7, label: "Julio" }, { value: 8, label: "Agosto" }, { value: 9, label: "Septiembre" },
+            { value: 10, label: "Octubre" }, { value: 11, label: "Noviembre" }, { value: 12, label: "Diciembre" },
+          ]
+          const dateBranches = node.data.dateBranches ?? []
+          const updateDB = (id: string, patch: Partial<DateBranch>) =>
+            set({ dateBranches: dateBranches.map((b) => (b.id === id ? { ...b, ...patch } : b)) })
+          const addDB = () =>
+            set({ dateBranches: [...dateBranches, { id: uid("db"), label: `Periodo ${dateBranches.length + 1}`, startMonth: 1, endMonth: 12 }] })
+          const removeDB = (id: string) => set({ dateBranches: dateBranches.filter((b) => b.id !== id) })
+          return (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Periodos de fecha</Label>
+                <Button variant="ghost" size="sm" onClick={addDB} className="h-7 gap-1 px-2 text-xs">
+                  <Plus className="size-3.5" /> Añadir periodo
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                El bot revisará el mes actual y tomará el camino del primer periodo que coincida.
+              </p>
+              {dateBranches.map((b) => (
+                <div key={b.id} className="space-y-2 rounded-lg border border-border bg-muted/30 p-2.5">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={b.label}
+                      onChange={(e) => updateDB(b.id, { label: e.target.value })}
+                      placeholder="Nombre del periodo"
+                      className="h-8"
+                    />
+                    <Button
+                      variant="ghost" size="icon"
+                      onClick={() => removeDB(b.id)}
+                      className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Desde</Label>
+                      <Select value={String(b.startMonth)} onValueChange={(v) => updateDB(b.id, { startMonth: Number(v) })}>
+                        <SelectTrigger size="sm" className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Hasta</Label>
+                      <Select value={String(b.endMonth)} onValueChange={(v) => updateDB(b.id, { endMonth: Number(v) })}>
+                        <SelectTrigger size="sm" className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
 
         {kind === "action" && (
           <div className="space-y-3">

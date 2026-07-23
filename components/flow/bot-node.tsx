@@ -28,10 +28,12 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
   const isPathEnd = !isRunning && isVisited && visitedNodeIds.size > 0
 
   // determine outgoing handles
-  const isMulti = data.kind === "question" || data.kind === "condition"
+  const isMulti = data.kind === "question" || data.kind === "condition" || data.kind === "date_condition"
   const branches = isMulti
     ? data.kind === "question"
       ? (data.options ?? []).map((o) => ({ id: o.id, label: o.label }))
+      : data.kind === "date_condition"
+      ? (data.dateBranches ?? []).map((b) => ({ id: b.id, label: b.label }))
       : (data.branches ?? []).map((b) => ({ id: b.id, label: b.label }))
     : []
   const hasSingleOut = !isMulti && meta.outputs === 1

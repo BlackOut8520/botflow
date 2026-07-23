@@ -14,6 +14,8 @@ interface SimulatorProps {
   isRunning: boolean
   isTyping: boolean
   variables: Record<string, string>
+  simulatedMonth: number
+  onSimulatedMonthChange: (month: number) => void
   onStart: () => void
   onReset: () => void
   onChooseOption: (id: string, label: string) => void
@@ -26,6 +28,8 @@ export function Simulator({
   isRunning,
   isTyping,
   variables,
+  simulatedMonth,
+  onSimulatedMonthChange,
   onStart,
   onReset,
   onChooseOption,
@@ -70,6 +74,20 @@ export function Simulator({
             <Play className="size-3.5" /> {messages.length ? "Reejecutar" : "Iniciar"}
           </Button>
         </div>
+      </div>
+
+      {/* month selector for date testing */}
+      <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-4 py-2">
+        <span className="text-[11px] font-medium text-muted-foreground shrink-0">Simular mes:</span>
+        <select
+          value={simulatedMonth}
+          onChange={(e) => onSimulatedMonthChange(Number(e.target.value))}
+          className="h-7 flex-1 rounded-md border border-border bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m, i) => (
+            <option key={i + 1} value={i + 1}>{m}</option>
+          ))}
+        </select>
       </div>
 
       {/* variables bar */}
