@@ -57,25 +57,26 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
           : undefined
       }
     >
-      {/* duplicate button: visible on hover */}
-      {duplicateNode && (
+      {/* action buttons on hover */}
+      <div className="absolute -right-2.5 -top-2.5 z-20 hidden items-center gap-1.5 group-hover:flex">
+        {duplicateNode && (
+          <button
+            onClick={(e) => { e.stopPropagation(); duplicateNode(id) }}
+            title="Duplicar nodo"
+            className="flex size-6 items-center justify-center rounded-full border-2 border-background shadow-md bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-colors"
+          >
+            <Copy className="size-3" />
+          </button>
+        )}
         <button
-          onClick={(e) => { e.stopPropagation(); duplicateNode(id) }}
-          title="Duplicar nodo"
-          className="absolute -right-2.5 -top-10 z-20 hidden size-6 items-center justify-center rounded-full border-2 border-background shadow-md group-hover:flex bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-colors"
+          onClick={(e) => { e.stopPropagation(); startFrom(id) }}
+          title="Simular desde aquí"
+          className="flex size-6 items-center justify-center rounded-full border-2 border-background shadow-md"
+          style={{ background: color }}
         >
-          <Copy className="size-3" />
+          <Play className="size-3 fill-white text-white" />
         </button>
-      )}
-      {/* play button: visible on hover, starts simulation from this node */}
-      <button
-        onClick={(e) => { e.stopPropagation(); startFrom(id) }}
-        title="Simular desde aquí"
-        className="absolute -right-2.5 -top-2.5 z-20 hidden size-6 items-center justify-center rounded-full border-2 border-background shadow-md group-hover:flex"
-        style={{ background: color }}
-      >
-        <Play className="size-3 fill-white text-white" />
-      </button>
+      </div>
       {hasTarget && <Handle type="target" position={Position.Left} style={handleStyle(color)} />}
 
       <div className="flex items-center gap-2 rounded-t-xl border-b border-border/60 px-3 py-2">
