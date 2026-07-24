@@ -7,6 +7,7 @@ interface SimulationState {
   visitedNodeIds: Set<string>
   isRunning: boolean
   startFrom: (nodeId: string) => void
+  duplicateNode?: (id: string) => void
 }
 
 export const SimulationContext = createContext<SimulationState>({

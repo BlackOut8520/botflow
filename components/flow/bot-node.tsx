@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { Play } from "lucide-react"
+import { Play, Copy } from "lucide-react"
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import type { BotNode as BotNodeType } from "@/lib/flow-types"
 import { NODE_KINDS } from "@/lib/flow-types"
@@ -17,7 +17,7 @@ const handleStyle = (color: string): React.CSSProperties => ({
 })
 
 function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
-  const { activeNodeId, visitedNodeIds, isRunning, startFrom } = useSimulation()
+  const { activeNodeId, visitedNodeIds, isRunning, startFrom, duplicateNode } = useSimulation()
   const visual = NODE_VISUALS[data.kind]
   const meta = NODE_KINDS[data.kind]
   const Icon = visual.icon
@@ -57,6 +57,16 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
           : undefined
       }
     >
+      {/* duplicate button: visible on hover */}
+      {duplicateNode && (
+        <button
+          onClick={(e) => { e.stopPropagation(); duplicateNode(id) }}
+          title="Duplicar nodo"
+          className="absolute -right-2.5 -top-10 z-20 hidden size-6 items-center justify-center rounded-full border-2 border-background shadow-md group-hover:flex bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-colors"
+        >
+          <Copy className="size-3" />
+        </button>
+      )}
       {/* play button: visible on hover, starts simulation from this node */}
       <button
         onClick={(e) => { e.stopPropagation(); startFrom(id) }}

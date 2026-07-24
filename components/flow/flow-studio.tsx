@@ -194,7 +194,7 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
     [setNodes, setEdges, markDirty],
   )
 
-  const addNode = useCallback(
+    const addNode = useCallback(
     (kind: NodeKind, position?: { x: number; y: number }) => {
       markDirty()
       const id = uid("n")
@@ -215,6 +215,32 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
       setTab("props")
     },
     [setNodes, markDirty, screenToFlowPosition],
+  )
+
+  const duplicateNode = useCallback(
+    (id: string) => {
+      markDirty()
+      setNodes((nds) => {
+        const sourceNode = nds.find((n) => n.id === id)
+        if (!sourceNode) return nds
+        const newId = uid("n")
+        const pos = { x: sourceNode.position.x + 30, y: sourceNode.position.y + 30 }
+        // Deep copy data and reset identifiers for internal elements like branches
+        const newData = JSON.parse(JSON.stringify(sourceNode.data))
+        if (newData.options) newData.options.forEach((o: any) => o.id = uid("opt"))
+        if (newData.branches) {
+          newData.branches.forEach((b: any) => {
+            b.id = uid("br")
+            if (b.rules) b.rules.forEach((r: any) => r.id = uid("rl"))
+          })
+        }
+        if (newData.dateBranches) newData.dateBranches.forEach((db: any) => db.id = uid("db"))
+        
+        const newNode: BotNode = { id: newId, type: "bot", position: pos, data: newData }
+        return [...nds, newNode]
+      })
+    },
+    [setNodes, markDirty],
   )
 
   // ---- flow switching / management ----
@@ -375,8 +401,9 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
       visitedNodeIds: sim.visitedNodeIds,
       isRunning: sim.isRunning,
       startFrom: sim.startFrom,
+      duplicateNode,
     }),
-    [sim.activeNodeId, sim.visitedNodeIds, sim.isRunning, sim.startFrom],
+    [sim.activeNodeId, sim.visitedNodeIds, sim.isRunning, sim.startFrom, duplicateNode],
   )
 
   return (
