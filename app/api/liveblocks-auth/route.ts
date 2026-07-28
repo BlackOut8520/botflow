@@ -1,10 +1,8 @@
 import { Liveblocks } from "@liveblocks/node";
 
-const liveblocks = new Liveblocks({
-  secret: process.env.LIVEBLOCKS_SECRET_KEY!,
-});
-
 export async function POST(request: Request) {
+  const secret = process.env.LIVEBLOCKS_SECRET_KEY || "sk_dev_FWrX5oVNDqvXuE0Hit20u8uFoadtvth1h74aN5-vHassFjJW8vd4fkbcZ6o_JJqJ";
+  const liveblocks = new Liveblocks({ secret });
   const { room, name } = await request.json()
 
   const COLORS = ["#DC2626", "#D97706", "#059669", "#7C3AED", "#DB2777", "#2563EB", "#16A34A"]
