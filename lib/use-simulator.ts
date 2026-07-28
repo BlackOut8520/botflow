@@ -1,0 +1,421 @@
+"use client"
+
+import { useCallback, useEffect, useRef, useState } from "react"
+import type { BotNode, BotEdge, ConditionBranch } from "./flow-types"
+
+export interface ChatMessage {
+  id: string
+  role: "bot" | "user" | "system"
+  text: string
+}
+
+export interface AwaitingState {
+  type: "options" | "input"
+  nodeId: string
+  options?: { id: string; label: string }[]
+  placeholder?: string
+}
+
+let counter = 0
+const nextId = () => `m${++counter}`
+
+function interpolate(text: string, vars: Record<string, string>) {
+  return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
+}
+
+function evalRule(r: Pick<ConditionRule, "variable" | "operator" | "value">, vars: Record<string, string>) {
+  const v = (vars[r.variable] ?? "").toLowerCase()
+  const target = (r.value ?? "").toLowerCase()
+  switch (r.operator) {
+    case "equals":      return v === target
+    case "not_equals":  return v !== target
+    case "contains":    return v.includes(target)
+    case "empty":       return v.trim() === ""
+    case "not_empty":   return v.trim() !== ""
+    default:            return false
+  }
+}
+
+function evalBranch(b: ConditionBranch, vars: Record<string, string>): boolean {
+  // Rama por defecto: sin variable ni reglas → siempre pasa
+  if ((!b.rules || b.rules.length === 0) && !b.variable) return true
+
+  // Nuevo formato: múltiples reglas con lógica AND / OR
+  if (b.rules && b.rules.length > 0) {
+    const logic = b.logic ?? "and"
+    return logic === "and"
+      ? b.rules.every((r) => evalRule(r, vars))
+      : b.rules.some((r) => evalRule(r, vars))
+  }
+
+  // Formato heredado: una sola variable (compatibilidad hacia atrás)
+  return evalRule({ variable: b.variable ?? "", operator: b.operator ?? "equals", value: b.value ?? "" }, vars)
+}
+
+function findMatchingKeywordNode(text: string, nodes: BotNode[]): { node: BotNode; matchedKeyword: string } | null {
+  const normalizedText = text.toLowerCase().trim()
+  if (!normalizedText) return null
+
+  const textWords = normalizedText.split(/[\s,.;!?¡¿"']+/).filter(Boolean)
+
+  for (const node of nodes) {
+    if (node.data.kind === "start") continue
+    const keywords = node.data.keywords
+    if (!keywords || !Array.isArray(keywords)) continue
+
+    for (const kw of keywords) {
+      const normalizedKw = kw.toLowerCase().trim()
+      if (!normalizedKw) continue
+
+      if (
+        normalizedText === normalizedKw ||
+        textWords.includes(normalizedKw) ||
+        normalizedText.includes(normalizedKw)
+      ) {
+        return { node, matchedKeyword: kw }
+      }
+    }
+  }
+
+  return null
+}
+
+interface UseSimulatorArgs {
+  nodes: BotNode[]
+  edges: BotEdge[]
+}
+
+export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
+  const [visitedNodeIds, setVisitedNodeIds] = useState<Set<string>>(new Set())
+  const [isRunning, setIsRunning] = useState(false)
+  const [awaiting, setAwaiting] = useState<AwaitingState | null>(null)
+  const [variables, setVariables] = useState<Record<string, string>>({})
+  const [isTyping, setIsTyping] = useState(false)
+  const now = new Date()
+  const [simulatedDay, setSimulatedDay] = useState<number>(now.getDate())
+  const [simulatedMonth, setSimulatedMonth] = useState<number>(now.getMonth() + 1)
+
+  // keep latest graph + vars in refs so scheduled callbacks stay fresh
+  const nodesRef = useRef(nodes)
+  const edgesRef = useRef(edges)
+  const varsRef = useRef<Record<string, string>>({})
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  useEffect(() => {
+    nodesRef.current = nodes
+    edgesRef.current = edges
+  }, [nodes, edges])
+
+  const clearTimers = () => {
+    timers.current.forEach((t) => clearTimeout(t))
+    timers.current = []
+  }
+
+  const schedule = (fn: () => void, delay: number) => {
+    const t = setTimeout(fn, delay)
+    timers.current.push(t)
+  }
+
+  const getNode = (id: string) => nodesRef.current.find((n) => n.id === id)
+  const getTarget = (nodeId: string, handleId?: string) => {
+    const edge = edgesRef.current.find(
+      (e) => e.source === nodeId && (handleId ? e.sourceHandle === handleId : true),
+    )
+    return edge?.target
+  }
+
+  const pushMessage = (role: ChatMessage["role"], text: string) =>
+    setMessages((prev) => [...prev, { id: nextId(), role, text }])
+
+  const visit = (id: string) => {
+    setActiveNodeId(id)
+    setVisitedNodeIds((prev) => new Set(prev).add(id))
+  }
+
+  // advance processes a node, then schedules the next step
+  const advance = useCallback((nodeId: string | undefined) => {
+    if (!nodeId) {
+      setIsRunning(false)
+      setActiveNodeId(null)
+      return
+    }
+    const node = getNode(nodeId)
+    if (!node) {
+      setIsRunning(false)
+      setActiveNodeId(null)
+      return
+    }
+
+    visit(nodeId)
+    const data = node.data
+
+    switch (data.kind) {
+      case "start": {
+        schedule(() => advance(getTarget(nodeId)), 500)
+        break
+      }
+      case "message": {
+        setIsTyping(true)
+        schedule(() => {
+          setIsTyping(false)
+          pushMessage("bot", interpolate(data.text ?? "", varsRef.current))
+          schedule(() => advance(getTarget(nodeId)), 650)
+        }, 700)
+        break
+      }
+      case "question": {
+        setIsTyping(true)
+        schedule(() => {
+          setIsTyping(false)
+          if (data.text) pushMessage("bot", interpolate(data.text, varsRef.current))
+          const cd = simulatedDay, cm = simulatedMonth
+          const cur = cm * 100 + cd
+          const visibleOptions = (data.options ?? []).filter((o) => {
+            if (!o.startMonth || !o.endMonth) return true
+            const s = o.startMonth * 100 + (o.startDay ?? 1)
+            const e = o.endMonth * 100 + (o.endDay ?? 31)
+            if (s <= e) return cur >= s && cur <= e
+            return cur >= s || cur <= e
+          })
+          if (visibleOptions.length === 0) {
+            pushMessage("system", "Ninguna opción disponible para este periodo. Fin del recorrido.")
+            setIsRunning(false)
+            setActiveNodeId(null)
+            return
+          }
+          setAwaiting({ type: "options", nodeId, options: visibleOptions.map((o) => ({ id: o.id, label: o.label })) })
+        }, 700)
+        break
+      }
+      case "input": {
+        setIsTyping(true)
+        schedule(() => {
+          setIsTyping(false)
+          if (data.text) pushMessage("bot", interpolate(data.text, varsRef.current))
+          setAwaiting({ type: "input", nodeId, placeholder: data.placeholder })
+        }, 700)
+        break
+      }
+      case "condition": {
+        pushMessage("system", `Evaluando condición «${data.label}»`)
+        schedule(() => {
+          const branches = data.branches ?? []
+          const match = branches.find((b) => !b.variable || evalBranch(b, varsRef.current))
+          if (match) {
+            pushMessage("system", `Rama seleccionada: ${match.label}`)
+            advance(getTarget(nodeId, match.id))
+          } else {
+            pushMessage("system", "Ninguna rama coincidió. Fin del recorrido.")
+            setIsRunning(false)
+            setActiveNodeId(null)
+          }
+        }, 700)
+        break
+      }
+      case "date_condition": {
+        const MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
+        const cd = simulatedDay, cm = simulatedMonth
+        const cur = cm * 100 + cd
+        pushMessage("system", `Verificando fecha: ${cd} de ${MONTH_NAMES[cm - 1]}`)
+        schedule(() => {
+          const dateBranches = data.dateBranches ?? []
+          const match = dateBranches.find((b) => {
+            const s = b.startMonth * 100 + (b.startDay ?? 1)
+            const e = b.endMonth * 100 + (b.endDay ?? 31)
+            if (s <= e) return cur >= s && cur <= e
+            return cur >= s || cur <= e
+          })
+          if (match) {
+            pushMessage("system", `Periodo activo: ${match.label}`)
+            advance(getTarget(nodeId, match.id))
+          } else {
+            pushMessage("system", "Ningún periodo de fecha coincide con la fecha simulada.")
+            setIsRunning(false)
+            setActiveNodeId(null)
+          }
+        }, 700)
+        break
+      }
+      case "action": {
+        pushMessage("system", `Ejecutando acción: ${data.actionName || data.label}`)
+        schedule(() => {
+          pushMessage("system", "Acción completada correctamente")
+          schedule(() => advance(getTarget(nodeId)), 500)
+        }, 1000)
+        break
+      }
+      case "end": {
+        pushMessage("system", "Conversación finalizada")
+        setIsRunning(false)
+        setActiveNodeId(null)
+        break
+      }
+    }
+  }, [])
+
+  const start = useCallback(() => {
+    clearTimers()
+    counter = 0
+    varsRef.current = {}
+    setVariables({})
+    setMessages([])
+    setVisitedNodeIds(new Set())
+    setAwaiting(null)
+    setIsRunning(true)
+    const startNode = nodesRef.current.find((n) => n.data.kind === "start") ?? nodesRef.current[0]
+    if (startNode) {
+      schedule(() => advance(startNode.id), 300)
+    } else {
+      setIsRunning(false)
+    }
+  }, [advance])
+
+  const reset = useCallback(() => {
+    clearTimers()
+    setIsRunning(false)
+    setActiveNodeId(null)
+    setVisitedNodeIds(new Set())
+    setMessages([])
+    setAwaiting(null)
+    setVariables({})
+    varsRef.current = {}
+    setIsTyping(false)
+  }, [])
+
+  const startFrom = useCallback((nodeId: string) => {
+    clearTimers()
+    counter = 0
+    varsRef.current = {}
+    setVariables({})
+    setMessages([])
+    setVisitedNodeIds(new Set())
+    setAwaiting(null)
+    setIsTyping(false)
+    setIsRunning(true)
+    const node = nodesRef.current.find((n) => n.id === nodeId)
+    const nodeLabel = node?.data.label ?? nodeId
+    schedule(() => {
+      pushMessage("system", `Simulación iniciada desde: ${nodeLabel}`)
+      advance(nodeId)
+    }, 100)
+  }, [advance])
+
+  const checkKeywordJump = useCallback(
+    (text: string): boolean => {
+      const match = findMatchingKeywordNode(text, nodesRef.current)
+      if (match) {
+        clearTimers()
+        setAwaiting(null)
+        setIsTyping(false)
+        pushMessage(
+          "system",
+          `⚡ Palabra clave detectada («${match.matchedKeyword}»): Saltando a «${match.node.data.label}»`,
+        )
+        schedule(() => advance(match.node.id), 400)
+        return true
+      }
+      return false
+    },
+    [advance],
+  )
+
+  const chooseOption = useCallback(
+    (optionId: string, label: string) => {
+      if (!awaiting || awaiting.type !== "options") return
+      const nodeId = awaiting.nodeId
+      const node = getNode(nodeId)
+      const varName = node?.data.variable
+      pushMessage("user", label)
+
+      if (checkKeywordJump(label)) {
+        return
+      }
+
+      if (varName) {
+        const nextVars = { ...varsRef.current, [varName]: label }
+        varsRef.current = nextVars
+        setVariables(nextVars)
+      }
+      setAwaiting(null)
+      schedule(() => advance(getTarget(nodeId, optionId)), 400)
+    },
+    [awaiting, advance, checkKeywordJump],
+  )
+
+  const submitInput = useCallback(
+    (value: string) => {
+      const trimmed = value.trim()
+      if (!trimmed) return
+
+      pushMessage("user", trimmed)
+
+      // 1. Check for global keyword jump
+      if (checkKeywordJump(trimmed)) {
+        return
+      }
+
+      // 2. Normal flow progression when no keyword matched
+      if (awaiting?.type === "input") {
+        const nodeId = awaiting.nodeId
+        const node = getNode(nodeId)
+        const varName = node?.data.variable
+        if (varName) {
+          const nextVars = { ...varsRef.current, [varName]: trimmed }
+          varsRef.current = nextVars
+          setVariables(nextVars)
+        }
+        setAwaiting(null)
+        schedule(() => advance(getTarget(nodeId)), 400)
+      } else if (awaiting?.type === "options") {
+        const nodeId = awaiting.nodeId
+        const lowerTrimmed = trimmed.toLowerCase()
+        const matchedOption = awaiting.options?.find(
+          (o) => o.label.toLowerCase() === lowerTrimmed || o.id.toLowerCase() === lowerTrimmed,
+        )
+
+        if (matchedOption) {
+          const node = getNode(nodeId)
+          const varName = node?.data.variable
+          if (varName) {
+            const nextVars = { ...varsRef.current, [varName]: matchedOption.label }
+            varsRef.current = nextVars
+            setVariables(nextVars)
+          }
+          setAwaiting(null)
+          schedule(() => advance(getTarget(nodeId, matchedOption.id)), 400)
+        } else {
+          pushMessage(
+            "system",
+            "Opción no reconocida. Selecciona una opción en pantalla o ingresa una palabra clave válida.",
+          )
+        }
+      } else {
+        pushMessage("system", "Ninguna palabra clave coincidente detectada.")
+      }
+    },
+    [awaiting, advance, checkKeywordJump],
+  )
+
+  useEffect(() => () => clearTimers(), [])
+
+  return {
+    messages,
+    activeNodeId,
+    visitedNodeIds,
+    isRunning,
+    awaiting,
+    variables,
+    isTyping,
+    simulatedDay,
+    simulatedMonth,
+    setSimulatedDay,
+    setSimulatedMonth,
+    start,
+    reset,
+    startFrom,
+    chooseOption,
+    submitInput,
+  }
+}
