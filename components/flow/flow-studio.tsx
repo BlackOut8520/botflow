@@ -129,6 +129,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
   }, [liveEdges, initialFlow])
   
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [tab, setTab] = useState<"blocks" | "props">("blocks")
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
@@ -426,9 +427,17 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
 
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     const node = params.nodes[0]
+    const edge = params.edges[0]
     if (node) {
       setSelectedId(node.id)
+      setSelectedEdgeId(null)
       setTab("props")
+    } else if (edge) {
+      setSelectedEdgeId(edge.id)
+      setSelectedId(null)
+    } else {
+      setSelectedId(null)
+      setSelectedEdgeId(null)
     }
   }, [])
 
@@ -457,18 +466,19 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
         const active = sim.visitedNodeIds.has(e.source) && sim.visitedNodeIds.has(e.target)
         const sourceNode = nodes.find((n) => n.id === e.source)
         const sourceColor = sourceNode ? NODE_VAR[sourceNode.data.kind] : "var(--muted-foreground)"
+        const isSelected = e.id === selectedEdgeId
         // sim running → animado con color primario
         if (active && sim.isRunning) {
-          return { ...e, animated: true, style: { stroke: "var(--primary)", strokeWidth: 3 } }
+          return { ...e, selected: isSelected, animated: true, style: { stroke: "var(--primary)", strokeWidth: 3 } }
         }
         // sim terminada → línea del path resaltada (estática)
         if (active && !sim.isRunning && sim.visitedNodeIds.size > 0) {
-          return { ...e, animated: false, style: { stroke: "var(--primary)", strokeWidth: 3, opacity: 0.5 } }
+          return { ...e, selected: isSelected, animated: false, style: { stroke: "var(--primary)", strokeWidth: 3, opacity: 0.5 } }
         }
         // sin simulación → color del nodo origen
-        return { ...e, animated: false, style: { stroke: sourceColor, strokeWidth: 2.5, opacity: 0.75 } }
+        return { ...e, selected: isSelected, animated: false, style: { stroke: sourceColor, strokeWidth: 2.5, opacity: 0.75 } }
       }),
-    [edges, nodes, sim.visitedNodeIds, sim.isRunning],
+    [edges, nodes, sim.visitedNodeIds, sim.isRunning, selectedEdgeId],
   )
 
   const simContextValue = useMemo(
@@ -554,7 +564,10 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
               onEdgesChange={handleEdgesChange}
               onConnect={onConnect}
               onSelectionChange={onSelectionChange}
-              onPaneClick={() => setSelectedId(null)}
+              onPaneClick={() => {
+                setSelectedId(null)
+                setSelectedEdgeId(null)
+              }}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
               fitView
