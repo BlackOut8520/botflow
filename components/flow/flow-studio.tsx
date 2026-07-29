@@ -179,9 +179,6 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
       if (c.type === "position" && c.position) {
         const node = map.get(c.id)
         if (node) node.update({ position: c.position })
-      } else if (c.type === "select") {
-        const node = map.get(c.id)
-        if (node) node.update({ selected: c.selected })
       } else if (c.type === "remove") {
         map.delete(c.id)
       } else if (c.type === "dimensions" && c.dimensions) {
@@ -196,10 +193,6 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
     const map = storage.get("edges")
     for (const c of changes) {
       if (c.type === "remove") map.delete(c.id)
-      else if (c.type === "select") {
-        const edge = map.get(c.id)
-        if (edge) edge.update({ selected: c.selected })
-      }
     }
   }, [markDirty])
 
@@ -441,6 +434,11 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedId) ?? null, [nodes, selectedId])
 
+  const flowNodes = useMemo(
+    () => nodes.map((n) => ({ ...n, selected: n.id === selectedId })),
+    [nodes, selectedId],
+  )
+
   // sync active/visited state onto nodes styling via context + pan to active node
   const activeNodeId = sim.activeNodeId
   useEffect(() => {
@@ -550,7 +548,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
             onPointerLeaveCapture={() => updateMyPresence({ cursor: null })}
           >
             <ReactFlow
-              nodes={nodes}
+              nodes={flowNodes}
               edges={styledEdges}
               onNodesChange={handleNodesChange}
               onEdgesChange={handleEdgesChange}
