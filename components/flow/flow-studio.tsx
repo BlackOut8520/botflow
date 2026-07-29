@@ -260,24 +260,41 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
     markDirty()
     const nodesMap = storage.get("nodes")
     const sourceNode = nodesMap.get(id)
-    if (!sourceNode) return
-    const original = sourceNode.toObject()
-    
+    let original: BotNode | null = null
+    if (sourceNode) {
+      original = typeof (sourceNode as any).toObject === "function" ? (sourceNode as any).toObject() : (sourceNode as unknown as BotNode)
+    } else {
+      const found = nodes.find((n) => n.id === id)
+      if (found) original = found
+    }
+    if (!original) return
+
     const newId = uid("n")
-    const pos = { x: original.position.x + 300, y: original.position.y }
-    const newData = JSON.parse(JSON.stringify(original.data))
-    if (newData.options) newData.options.forEach((o: any) => o.id = uid("opt"))
+    const pos = {
+      x: (original.position?.x ?? 0) + 40,
+      y: (original.position?.y ?? 0) + 40,
+    }
+    const newData = JSON.parse(JSON.stringify(original.data ?? {}))
+    if (newData.options) newData.options.forEach((o: any) => (o.id = uid("opt")))
     if (newData.branches) {
       newData.branches.forEach((b: any) => {
         b.id = uid("br")
-        if (b.rules) b.rules.forEach((r: any) => r.id = uid("rl"))
+        if (b.rules) b.rules.forEach((r: any) => (r.id = uid("rl")))
       })
     }
-    if (newData.dateBranches) newData.dateBranches.forEach((db: any) => db.id = uid("db"))
-    
-    const newNode: BotNode = { ...original, id: newId, position: pos, data: newData }
+    if (newData.dateBranches) newData.dateBranches.forEach((db: any) => (db.id = uid("db")))
+
+    const newNode: BotNode = {
+      ...original,
+      id: newId,
+      position: pos,
+      data: newData,
+      selected: false,
+    }
     nodesMap.set(newId, new LiveObject(newNode))
-  }, [markDirty])
+    setSelectedId(newId)
+    setTab("props")
+  }, [markDirty, nodes])
 
   // ---- flow switching / management ----
   const loadFlow = useCallback(

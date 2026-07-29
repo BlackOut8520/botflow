@@ -58,20 +58,34 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
       }
     >
       {/* action buttons on hover */}
-      <div className="absolute -right-2.5 -top-2.5 z-20 hidden items-center gap-1.5 group-hover:flex">
+      <div className="absolute -right-2.5 -top-2.5 z-20 hidden items-center gap-1.5 group-hover:flex nodrag nopan">
         {duplicateNode && (
           <button
-            onClick={(e) => { e.stopPropagation(); duplicateNode(id) }}
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              duplicateNode(id)
+            }}
             title="Duplicar nodo"
-            className="flex size-6 items-center justify-center rounded-full border-2 border-background shadow-md bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-colors"
+            className="flex size-6 items-center justify-center rounded-full border-2 border-background shadow-md bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-colors cursor-pointer"
           >
             <Copy className="size-3" />
           </button>
         )}
         <button
-          onClick={(e) => { e.stopPropagation(); startFrom(id) }}
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            startFrom(id)
+          }}
           title="Simular desde aquí"
-          className="flex size-6 items-center justify-center rounded-full border-2 border-background shadow-md"
+          className="flex size-6 items-center justify-center rounded-full border-2 border-background shadow-md cursor-pointer"
           style={{ background: color }}
         >
           <Play className="size-3 fill-white text-white" />
