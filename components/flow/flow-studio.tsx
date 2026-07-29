@@ -257,43 +257,70 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
   }, [markDirty, screenToFlowPosition])
 
   const duplicateNode = useMutation(({ storage }, id: string) => {
-    markDirty()
-    const nodesMap = storage.get("nodes")
-    const sourceNode = nodesMap.get(id)
-    let original: BotNode | null = null
-    if (sourceNode) {
-      original = typeof (sourceNode as any).toObject === "function" ? (sourceNode as any).toObject() : (sourceNode as unknown as BotNode)
-    } else {
-      const found = nodes.find((n) => n.id === id)
-      if (found) original = found
-    }
-    if (!original) return
+    try {
+      markDirty()
+      const targetNode = nodes.find((n) => n.id === id) ?? (() => {
+        const live = storage.get("nodes")?.get(id)
+        if (!live) return null
+        return typeof (live as any).toObject === "function" ? (live as any).toObject() : live
+      })()
+      if (!targetNode) return
 
-    const newId = uid("n")
-    const pos = {
-      x: (original.position?.x ?? 0) + 40,
-      y: (original.position?.y ?? 0) + 40,
-    }
-    const newData = JSON.parse(JSON.stringify(original.data ?? {}))
-    if (newData.options) newData.options.forEach((o: any) => (o.id = uid("opt")))
-    if (newData.branches) {
-      newData.branches.forEach((b: any) => {
-        b.id = uid("br")
-        if (b.rules) b.rules.forEach((r: any) => (r.id = uid("rl")))
-      })
-    }
-    if (newData.dateBranches) newData.dateBranches.forEach((db: any) => (db.id = uid("db")))
+      const newId = uid("n")
+      const pos = {
+        x: (targetNode.position?.x ?? 0) + 40,
+        y: (targetNode.position?.y ?? 0) + 40,
+      }
 
-    const newNode: BotNode = {
-      ...original,
-      id: newId,
-      position: pos,
-      data: newData,
-      selected: false,
+      // Safely clone data stripping any Liveblocks proxies or internal circular symbols
+      const cleanData = (data: any): any => {
+        if (!data || typeof data !== "object") return data
+        const res: any = Array.isArray(data) ? [] : {}
+        for (const k of Object.keys(data)) {
+          if (k.startsWith("_") || typeof data[k] === "function") continue
+          const val = data[k]
+          if (val && typeof val === "object") {
+            const raw = typeof val.toObject === "function" ? val.toObject() : val
+            res[k] = cleanData(raw)
+          } else {
+            res[k] = val
+          }
+        }
+        return res
+      }
+
+      const newData = cleanData(targetNode.data ?? {})
+      if (Array.isArray(newData.options)) {
+        newData.options = newData.options.map((o: any) => ({ ...o, id: uid("opt") }))
+      }
+      if (Array.isArray(newData.branches)) {
+        newData.branches = newData.branches.map((b: any) => ({
+          ...b,
+          id: uid("br"),
+          rules: Array.isArray(b.rules) ? b.rules.map((r: any) => ({ ...r, id: uid("rl") })) : b.rules,
+        }))
+      }
+      if (Array.isArray(newData.dateBranches)) {
+        newData.dateBranches = newData.dateBranches.map((db: any) => ({ ...db, id: uid("db") }))
+      }
+
+      const newNode: BotNode = {
+        id: newId,
+        type: targetNode.type ?? "bot",
+        position: pos,
+        data: newData,
+        selected: false,
+      }
+
+      const nodesMap = storage.get("nodes")
+      if (nodesMap) {
+        nodesMap.set(newId, new LiveObject(newNode))
+      }
+      setSelectedId(newId)
+      setTab("props")
+    } catch (err) {
+      console.error("Error duplicating node:", err)
     }
-    nodesMap.set(newId, new LiveObject(newNode))
-    setSelectedId(newId)
-    setTab("props")
   }, [markDirty, nodes])
 
   // ---- flow switching / management ----
