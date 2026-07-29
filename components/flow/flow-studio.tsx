@@ -564,6 +564,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
               onEdgesChange={handleEdgesChange}
               onConnect={onConnect}
               onSelectionChange={onSelectionChange}
+              onEdgeClick={(_, edge) => setSelectedEdgeId(edge.id)}
               onPaneClick={() => {
                 setSelectedId(null)
                 setSelectedEdgeId(null)

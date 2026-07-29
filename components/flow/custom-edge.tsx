@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps, getBezierPath, useReactFlow } from "@xyflow/react"
 import { X } from "lucide-react"
 
@@ -14,6 +15,7 @@ export function CustomEdge({
   selected,
 }: EdgeProps) {
   const { deleteElements } = useReactFlow()
+  const [hovered, setHovered] = useState(false)
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -23,16 +25,36 @@ export function CustomEdge({
     targetPosition,
   })
 
+  const showDelete = Boolean(selected || hovered)
+
   return (
     <>
-      {/* Área invisible más ancha para facilitar dar clic y seleccionar la línea */}
-      <BaseEdge path={edgePath} style={{ strokeWidth: 24, stroke: "transparent", cursor: "pointer" }} />
+      {/* Invisible wider hit area for easy hover and click */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={30}
+        style={{ cursor: "pointer", pointerEvents: "all" }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      />
       
-      {/* La línea visible real */}
-      <BaseEdge path={edgePath} markerEnd={markerEnd} style={{ ...style, strokeWidth: Math.max(Number(style?.strokeWidth) || 0, 3) }} interactionWidth={0} />
+      {/* Real visible line */}
+      <BaseEdge
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{
+          ...style,
+          strokeWidth: showDelete ? 4 : Math.max(Number(style?.strokeWidth) || 0, 3),
+          stroke: showDelete ? "var(--destructive)" : style?.stroke,
+          transition: "stroke 0.15s, stroke-width 0.15s",
+        }}
+        interactionWidth={0}
+      />
       
-      {/* Botón de borrar que aparece solo cuando se selecciona la línea */}
-      {selected && (
+      {/* Delete button shown when hovered or selected */}
+      {showDelete && (
         <EdgeLabelRenderer>
           <div
             style={{
@@ -42,11 +64,16 @@ export function CustomEdge({
               zIndex: 1000,
             }}
             className="nodrag nopan"
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
           >
             <button
+              type="button"
               className="flex size-6 cursor-pointer items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-md transition-transform hover:scale-110 hover:bg-destructive/90"
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation()
+                e.preventDefault()
                 deleteElements({ edges: [{ id }] })
               }}
               title="Eliminar conexión"
