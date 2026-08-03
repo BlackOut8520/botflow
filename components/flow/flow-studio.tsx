@@ -16,10 +16,11 @@ import {
   type NodeChange,
   type EdgeChange,
   type OnSelectionChangeParams,
+  type Edge,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 
-import type { BotNode, BotNodeData, NodeKind } from "@/lib/flow-types"
+import type { BotNode, BotEdge, BotNodeData, NodeKind } from "@/lib/flow-types"
 import { NODE_KINDS } from "@/lib/flow-types"
 import { NODE_VAR } from "@/lib/node-visuals"
 import { useSimulator } from "@/lib/use-simulator"
@@ -572,6 +573,9 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
               fitView
+              fitViewOptions={{ padding: 0.2, minZoom: 0.005 }}
+              minZoom={0.005}
+              maxZoom={3}
               proOptions={{ hideAttribution: true }}
               defaultEdgeOptions={{ style: { strokeWidth: 3 } }}
             >
