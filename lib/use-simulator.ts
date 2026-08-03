@@ -362,13 +362,22 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
           history.pop()
         }
         const previousNodeId = history.pop()
+        
         if (previousNodeId) {
+          // 1º Prioridad: Pila de Historial en runtime
           pushMessage("system", "↩ Regresando al menú anterior...")
           schedule(() => advance(previousNodeId), 400)
         } else {
-          pushMessage("system", "No hay un menú anterior en el historial. Fin del recorrido.")
-          setIsRunning(false)
-          setActiveNodeId(null)
+          // 2º Prioridad: Fallback por Inspección de Aristas Entrantes del Grafo
+          const incomingEdge = edgesRef.current.find((e) => e.target === nodeId && e.source !== nodeId)
+          if (incomingEdge?.source) {
+            pushMessage("system", "↩ Regresando al nodo previo del diagrama...")
+            schedule(() => advance(incomingEdge.source), 400)
+          } else {
+            pushMessage("system", "No hay un menú anterior en el historial ni en el diagrama. Fin del recorrido.")
+            setIsRunning(false)
+            setActiveNodeId(null)
+          }
         }
         return
       }
