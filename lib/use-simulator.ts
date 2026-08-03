@@ -365,10 +365,12 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         if (previousNodeId) {
           pushMessage("system", "↩ Regresando al menú anterior...")
           schedule(() => advance(previousNodeId), 400)
-          return
         } else {
-          pushMessage("system", "No hay un menú anterior en el historial.")
+          pushMessage("system", "No hay un menú anterior en el historial. Fin del recorrido.")
+          setIsRunning(false)
+          setActiveNodeId(null)
         }
+        return
       }
 
       setAwaiting(null)
