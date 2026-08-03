@@ -337,8 +337,16 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
       const varName = node?.data.variable
       pushMessage("user", label)
 
-      if (checkKeywordJump(label)) {
-        return
+      const opt = node?.data.options?.find((o) => o.id === optionId)
+      const targetNodeId = getTarget(nodeId, optionId)
+      const isDynamicBack =
+        opt?.isBack || (label.toLowerCase().trim() === "regresar" && !targetNodeId)
+
+      // Only evaluate keyword jump if the option has no graph edge and is not a back action
+      if (!targetNodeId && !isDynamicBack) {
+        if (checkKeywordJump(label)) {
+          return
+        }
       }
 
       if (varName) {
@@ -346,10 +354,6 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         varsRef.current = nextVars
         setVariables(nextVars)
       }
-
-      const opt = node?.data.options?.find((o) => o.id === optionId)
-      const isDynamicBack =
-        opt?.isBack || (label.toLowerCase().trim() === "regresar" && !getTarget(nodeId, optionId))
 
       if (isDynamicBack) {
         setAwaiting(null)
@@ -368,7 +372,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
       }
 
       setAwaiting(null)
-      schedule(() => advance(getTarget(nodeId, optionId)), 400)
+      schedule(() => advance(targetNodeId), 400)
     },
     [awaiting, advance, checkKeywordJump],
   )
