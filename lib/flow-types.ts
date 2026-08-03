@@ -5,6 +5,8 @@ export type NodeKind = "start" | "message" | "question" | "input" | "condition" 
 export interface QuestionOption {
   id: string
   label: string
+  /** Si es true, retrocede dinámicamente al menú anterior sin requerir un conector estático */
+  isBack?: boolean
   /** Si se define, la opción solo aparece cuando la fecha actual está en el rango */
   startDay?: number    // 1-31
   startMonth?: number  // 1-12

@@ -53,8 +53,8 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
 
   // question options
   const options = node.data.options ?? []
-  const updateOption = (id: string, label: string, startDay?: number, startMonth?: number, endDay?: number, endMonth?: number) =>
-    set({ options: options.map((o) => (o.id === id ? { ...o, label, startDay, startMonth, endDay, endMonth } : o)) })
+  const updateOption = (id: string, patch: Partial<QuestionOption>) =>
+    set({ options: options.map((o) => (o.id === id ? { ...o, ...patch } : o)) })
   const addOption = () =>
     set({ options: [...options, { id: uid("opt"), label: `Opción ${options.length + 1}` }] as QuestionOption[] })
   const removeOption = (id: string) => set({ options: options.filter((o) => o.id !== id) })
@@ -191,7 +191,7 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                       <div className="flex items-center gap-2">
                         <Input
                           value={o.label}
-                          onChange={(e) => updateOption(o.id, e.target.value)}
+                          onChange={(e) => updateOption(o.id, { label: e.target.value })}
                           className="h-8"
                           placeholder="Texto de la opción"
                         />
@@ -204,20 +204,35 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                           <X className="size-4" />
                         </Button>
                       </div>
-                      {/* Rango de fechas opcional */}
-                      <div className="space-y-1">
+                      {/* Opciones especiales: Acción dinámica Regresar & Rango de fechas */}
+                      <div className="space-y-1.5 pt-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            id={`opt-back-${o.id}`}
+                            checked={!!o.isBack}
+                            onChange={(e) => updateOption(o.id, { isBack: e.target.checked })}
+                            className="size-3.5 accent-primary"
+                          />
+                          <label htmlFor={`opt-back-${o.id}`} className="text-[11px] font-medium text-foreground cursor-pointer select-none">
+                            ↩ Acción dinámica: Volver al menú anterior
+                          </label>
+                        </div>
                         <div className="flex items-center gap-1.5">
                           <input
                             type="checkbox"
                             id={`opt-date-${o.id}`}
                             checked={!!o.startMonth}
-                            onChange={(e) => updateOption(o.id, o.label,
-                              e.target.checked ? 1 : undefined, e.target.checked ? 1 : undefined,
-                              e.target.checked ? 31 : undefined, e.target.checked ? 12 : undefined)}
+                            onChange={(e) => updateOption(o.id, {
+                              startDay: e.target.checked ? 1 : undefined,
+                              startMonth: e.target.checked ? 1 : undefined,
+                              endDay: e.target.checked ? 31 : undefined,
+                              endMonth: e.target.checked ? 12 : undefined,
+                            })}
                             className="size-3.5 accent-primary"
                           />
                           <label htmlFor={`opt-date-${o.id}`} className="text-[11px] text-muted-foreground cursor-pointer select-none">
-                            Restringir por periodo
+                            Restringir por periodo de fecha
                           </label>
                         </div>
                         {o.startMonth && (
@@ -225,10 +240,10 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                             <div className="flex items-center gap-1.5">
                               <Label className="text-[10px] w-10 shrink-0">Desde</Label>
                               <input type="number" min={1} max={31} value={o.startDay ?? 1}
-                                onChange={(e) => updateOption(o.id, o.label, Number(e.target.value), o.startMonth, o.endDay, o.endMonth)}
+                                onChange={(e) => updateOption(o.id, { startDay: Number(e.target.value) })}
                                 className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                               />
-                              <Select value={String(o.startMonth)} onValueChange={(v) => updateOption(o.id, o.label, o.startDay, Number(v), o.endDay, o.endMonth)}>
+                              <Select value={String(o.startMonth)} onValueChange={(v) => updateOption(o.id, { startMonth: Number(v) })}>
                                 <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                                 <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                               </Select>
@@ -236,10 +251,10 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                             <div className="flex items-center gap-1.5">
                               <Label className="text-[10px] w-10 shrink-0">Hasta</Label>
                               <input type="number" min={1} max={31} value={o.endDay ?? 31}
-                                onChange={(e) => updateOption(o.id, o.label, o.startDay, o.startMonth, Number(e.target.value), o.endMonth)}
+                                onChange={(e) => updateOption(o.id, { endDay: Number(e.target.value) })}
                                 className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                               />
-                              <Select value={String(o.endMonth ?? 12)} onValueChange={(v) => updateOption(o.id, o.label, o.startDay, o.startMonth, o.endDay, Number(v))}>
+                              <Select value={String(o.endMonth ?? 12)} onValueChange={(v) => updateOption(o.id, { endMonth: Number(v) })}>
                                 <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                                 <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                               </Select>

@@ -97,10 +97,11 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
   const [simulatedDay, setSimulatedDay] = useState<number>(now.getDate())
   const [simulatedMonth, setSimulatedMonth] = useState<number>(now.getMonth() + 1)
 
-  // keep latest graph + vars in refs so scheduled callbacks stay fresh
+  // keep latest graph + vars + menu history in refs so scheduled callbacks stay fresh
   const nodesRef = useRef(nodes)
   const edgesRef = useRef(edges)
   const varsRef = useRef<Record<string, string>>({})
+  const menuHistoryRef = useRef<string[]>([])
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
@@ -166,6 +167,10 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         break
       }
       case "question": {
+        const history = menuHistoryRef.current
+        if (history[history.length - 1] !== nodeId) {
+          history.push(nodeId)
+        }
         setIsTyping(true)
         schedule(() => {
           setIsTyping(false)
@@ -253,12 +258,13 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         break
       }
     }
-  }, [])
+  }, [simulatedDay, simulatedMonth])
 
   const start = useCallback(() => {
     clearTimers()
     counter = 0
     varsRef.current = {}
+    menuHistoryRef.current = []
     setVariables({})
     setMessages([])
     setVisitedNodeIds(new Set())
@@ -281,6 +287,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     setAwaiting(null)
     setVariables({})
     varsRef.current = {}
+    menuHistoryRef.current = []
     setIsTyping(false)
   }, [])
 
@@ -288,6 +295,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     clearTimers()
     counter = 0
     varsRef.current = {}
+    menuHistoryRef.current = []
     setVariables({})
     setMessages([])
     setVisitedNodeIds(new Set())
@@ -338,6 +346,27 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         varsRef.current = nextVars
         setVariables(nextVars)
       }
+
+      const opt = node?.data.options?.find((o) => o.id === optionId)
+      const isDynamicBack =
+        opt?.isBack || (label.toLowerCase().trim() === "regresar" && !getTarget(nodeId, optionId))
+
+      if (isDynamicBack) {
+        setAwaiting(null)
+        const history = menuHistoryRef.current
+        if (history.length > 0 && history[history.length - 1] === nodeId) {
+          history.pop()
+        }
+        const previousNodeId = history.pop()
+        if (previousNodeId) {
+          pushMessage("system", "↩ Regresando al menú anterior...")
+          schedule(() => advance(previousNodeId), 400)
+          return
+        } else {
+          pushMessage("system", "No hay un menú anterior en el historial.")
+        }
+      }
+
       setAwaiting(null)
       schedule(() => advance(getTarget(nodeId, optionId)), 400)
     },

@@ -32,7 +32,7 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
   const isMulti = data.kind === "question" || data.kind === "condition" || data.kind === "date_condition"
   const branches = isMulti
     ? data.kind === "question"
-      ? (data.options ?? []).map((o) => ({ id: o.id, label: o.label }))
+      ? (data.options ?? []).map((o) => ({ id: o.id, label: o.label, isBack: o.isBack }))
       : data.kind === "date_condition"
       ? (data.dateBranches ?? []).map((b) => ({ id: b.id, label: b.label }))
       : (data.branches ?? []).map((b) => ({ id: b.id, label: b.label }))
@@ -139,8 +139,13 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
       {branches.length > 0 && (
         <div className="flex flex-col gap-1.5 border-t border-border/60 px-3 py-2">
           {branches.map((b) => (
-            <div key={b.id} className="relative flex items-center justify-end rounded-md bg-muted/60 px-2 py-1">
-              <span className="truncate text-[11px] font-medium text-foreground">{b.label || "—"}</span>
+            <div key={b.id} className="relative flex items-center justify-between rounded-md bg-muted/60 px-2 py-1 gap-2">
+              {b.isBack && (
+                <span className="inline-flex items-center text-[9px] font-semibold text-primary bg-primary/10 rounded px-1.5 py-0.5 border border-primary/20">
+                  ↩ Volver
+                </span>
+              )}
+              <span className="truncate text-[11px] font-medium text-foreground ml-auto">{b.label || "—"}</span>
               <Handle
                 id={b.id}
                 type="source"
