@@ -37,7 +37,8 @@ function toArray<T>(val: any): T[] {
 }
 
 function evalRule(r: Pick<ConditionRule, "variable" | "operator" | "value">, vars: Record<string, string>) {
-  const v = (vars[r.variable] ?? "").trim().toLowerCase()
+  if (!r.variable || !r.variable.trim()) return false
+  const v = (vars[r.variable.trim()] ?? "").trim().toLowerCase()
   const target = (r.value ?? "").trim().toLowerCase()
   switch (r.operator) {
     case "equals":      return v === target
@@ -52,9 +53,6 @@ function evalRule(r: Pick<ConditionRule, "variable" | "operator" | "value">, var
 function evalBranch(b: ConditionBranch, vars: Record<string, string>): boolean {
   const rules = toArray<ConditionRule>(b.rules)
 
-  // Rama por defecto: sin variable ni reglas → siempre pasa
-  if (rules.length === 0 && !b.variable) return true
-
   // Nuevo formato: múltiples reglas con lógica AND / OR
   if (rules.length > 0) {
     const logic = b.logic ?? "and"
@@ -64,7 +62,11 @@ function evalBranch(b: ConditionBranch, vars: Record<string, string>): boolean {
   }
 
   // Formato heredado: una sola variable (compatibilidad hacia atrás)
-  return evalRule({ variable: b.variable ?? "", operator: b.operator ?? "equals", value: b.value ?? "" }, vars)
+  if (b.variable) {
+    return evalRule({ variable: b.variable, operator: b.operator ?? "equals", value: b.value ?? "" }, vars)
+  }
+
+  return false
 }
 
 function findMatchingKeywordNode(text: string, nodes: BotNode[]): { node: BotNode; matchedKeyword: string } | null {
@@ -222,7 +224,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         pushMessage("system", `Evaluando condición «${data.label}»`)
         schedule(() => {
           const branches = data.branches ?? []
-          const match = branches.find((b) => !b.variable || evalBranch(b, varsRef.current))
+          const match = branches.find((b) => evalBranch(b, varsRef.current))
           if (match) {
             pushMessage("system", `Rama seleccionada: ${match.label}`)
             advance(getTarget(nodeId, match.id))
