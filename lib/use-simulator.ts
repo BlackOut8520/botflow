@@ -23,29 +23,44 @@ function interpolate(text: string, vars: Record<string, string>) {
   return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
 }
 
+function toArray<T>(val: any): T[] {
+  if (!val) return []
+  if (Array.isArray(val)) return val
+  if (typeof val.toImmutable === "function") return val.toImmutable()
+  if (typeof val.toArray === "function") return val.toArray()
+  if (typeof val.values === "function") return Array.from(val.values())
+  try {
+    return Array.from(val)
+  } catch {
+    return []
+  }
+}
+
 function evalRule(r: Pick<ConditionRule, "variable" | "operator" | "value">, vars: Record<string, string>) {
-  const v = (vars[r.variable] ?? "").toLowerCase()
-  const target = (r.value ?? "").toLowerCase()
+  const v = (vars[r.variable] ?? "").trim().toLowerCase()
+  const target = (r.value ?? "").trim().toLowerCase()
   switch (r.operator) {
     case "equals":      return v === target
     case "not_equals":  return v !== target
     case "contains":    return v.includes(target)
-    case "empty":       return v.trim() === ""
-    case "not_empty":   return v.trim() !== ""
+    case "empty":       return v === ""
+    case "not_empty":   return v !== ""
     default:            return false
   }
 }
 
 function evalBranch(b: ConditionBranch, vars: Record<string, string>): boolean {
+  const rules = toArray<ConditionRule>(b.rules)
+
   // Rama por defecto: sin variable ni reglas → siempre pasa
-  if ((!b.rules || b.rules.length === 0) && !b.variable) return true
+  if (rules.length === 0 && !b.variable) return true
 
   // Nuevo formato: múltiples reglas con lógica AND / OR
-  if (b.rules && b.rules.length > 0) {
+  if (rules.length > 0) {
     const logic = b.logic ?? "and"
     return logic === "and"
-      ? b.rules.every((r) => evalRule(r, vars))
-      : b.rules.some((r) => evalRule(r, vars))
+      ? rules.every((r) => evalRule(r, vars))
+      : rules.some((r) => evalRule(r, vars))
   }
 
   // Formato heredado: una sola variable (compatibilidad hacia atrás)
