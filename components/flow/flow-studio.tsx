@@ -49,8 +49,8 @@ import { Cursors } from "./cursors"
 import { runFlowAudit } from "@/lib/flow-audit"
 import { AuditDialog } from "./audit-dialog"
 import { AuditPanel } from "./audit-panel"
-import { extractFlowPaths, type FlowPath } from "@/lib/flow-simulator"
-import { PathSimulatorDialog } from "./path-simulator-dialog"
+import { extractFlowPaths } from "@/lib/flow-simulator"
+import { PathsPanel } from "./paths-panel"
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
@@ -136,17 +136,14 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
   
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
-  const [tab, setTab] = useState<"blocks" | "props" | "audit">("blocks")
+  const [tab, setTab] = useState<"blocks" | "props" | "audit" | "paths">("blocks")
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
 
   // audit state
   const [auditOpen, setAuditOpen] = useState(false)
 
-  // simulator state
-  const [simulatorOpen, setSimulatorOpen] = useState(false)
-  const [simulatorPaths, setSimulatorPaths] = useState<FlowPath[]>([])
-  const [simulatorHasMore, setSimulatorHasMore] = useState(false)
+
 
   // flow management
   const [flows, setFlows] = useState<FlowSummary[]>(initialFlows)
@@ -163,6 +160,9 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
 
   // audit report (memoized)
   const auditReport = useMemo(() => runFlowAudit(nodes as BotNode[], edges as BotEdge[]), [nodes, edges])
+
+  // simulator report (memoized)
+  const simulatorReport = useMemo(() => extractFlowPaths(nodes as BotNode[], edges as BotEdge[]), [nodes, edges])
 
   const handleFocusNode = useCallback(
     (nodeId: string) => {
@@ -439,11 +439,9 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
   )
 
   const handleSimulate = useCallback(() => {
-    const { paths, hasMore } = extractFlowPaths(nodes as BotNode[], edges as BotEdge[])
-    setSimulatorPaths(paths)
-    setSimulatorHasMore(hasMore)
-    setSimulatorOpen(true)
-  }, [nodes, edges])
+    setLeftOpen(true)
+    setTab("paths")
+  }, [])
 
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     const node = params.nodes[0]
@@ -558,19 +556,20 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
           {/* left sidebar: blocks / properties / audit */}
           {leftOpen && (
             <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-card">
-              <Tabs value={tab} onValueChange={(v) => setTab(v as "blocks" | "props" | "audit")} className="flex min-h-0 flex-1 flex-col">
+              <Tabs value={tab} onValueChange={(v) => setTab(v as "blocks" | "props" | "audit" | "paths")} className="flex min-h-0 flex-1 flex-col">
                 <div className="border-b border-border px-3 pt-3">
                   <TabsList className="w-full">
                     <TabsTrigger value="blocks" className="flex-1 text-xs">Bloques</TabsTrigger>
-                    <TabsTrigger value="props" className="flex-1 text-xs">Propiedades</TabsTrigger>
+                    <TabsTrigger value="props" className="flex-1 text-xs">Ajustes</TabsTrigger>
                     <TabsTrigger value="audit" className="flex-1 text-xs gap-1">
-                      Auditoría
+                      Salud
                       {(auditReport.criticalCount + auditReport.warningCount) > 0 && (
                         <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white px-1">
                           {auditReport.criticalCount + auditReport.warningCount}
                         </span>
                       )}
                     </TabsTrigger>
+                    <TabsTrigger value="paths" className="flex-1 text-xs">Caminos</TabsTrigger>
                   </TabsList>
                 </div>
                 <TabsContent value="blocks" className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -581,6 +580,9 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
                 </TabsContent>
                 <TabsContent value="audit" className="min-h-0 flex-1 overflow-hidden p-0">
                   <AuditPanel report={auditReport} onFocusNode={handleFocusNode} />
+                </TabsContent>
+                <TabsContent value="paths" className="min-h-0 flex-1 overflow-hidden p-0">
+                  <PathsPanel paths={simulatorReport.paths} hasMore={simulatorReport.hasMore} />
                 </TabsContent>
               </Tabs>
             </aside>
@@ -689,12 +691,6 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
           )}
         </div>
       </div>
-      <PathSimulatorDialog 
-        open={simulatorOpen} 
-        onOpenChange={setSimulatorOpen} 
-        paths={simulatorPaths}
-        hasMore={simulatorHasMore}
-      />
     </SimulationContext.Provider>
   )
 }
