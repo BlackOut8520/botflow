@@ -82,6 +82,8 @@ interface FlowBarProps {
   activeFlowId: string | null
   saveStatus: SaveStatus
   switching: boolean
+  auditIssueCount?: number
+  onAudit?: () => void
   onSelect: (id: string) => void
   onCreate: () => void
   onRename: (name: string) => void
@@ -96,6 +98,8 @@ export function FlowBar({
   activeFlowId,
   saveStatus,
   switching,
+  auditIssueCount = 0,
+  onAudit,
   onSelect,
   onCreate,
   onRename,
@@ -228,6 +232,29 @@ export function FlowBar({
           </div>
 
           <div className="mx-1 h-5 w-px bg-border" aria-hidden />
+
+          {onAudit && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 border-amber-500/40 hover:border-amber-500 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
+              onClick={onAudit}
+              title="Abrir panel de auditoría y salud del flujo"
+            >
+              <span className="relative flex size-2">
+                {auditIssueCount > 0 && (
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                )}
+                <span className={cn("size-2 rounded-full", auditIssueCount > 0 ? "bg-amber-500" : "bg-emerald-500")} />
+              </span>
+              Auditar flujo
+              {auditIssueCount > 0 && (
+                <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white px-1">
+                  {auditIssueCount}
+                </span>
+              )}
+            </Button>
+          )}
 
           <Button
             variant="default"

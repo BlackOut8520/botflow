@@ -44,7 +44,7 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
     <div
       className={cn(
         "group relative min-w-52 max-w-64 rounded-xl border bg-card shadow-sm transition-all",
-        selected ? "border-primary ring-2 ring-primary/40" : "border-border",
+        selected ? "border-primary ring-4 ring-primary/50 shadow-lg scale-[1.02]" : "border-border",
         isActive && "ring-2 ring-primary shadow-lg scale-[1.03]",
         isPathEnd && "opacity-100",
         isVisited && isRunning && "opacity-80",

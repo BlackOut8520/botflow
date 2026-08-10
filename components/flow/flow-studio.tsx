@@ -46,6 +46,8 @@ import { Workflow, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpe
 import { useUpdateMyPresence, useStorage, useMutation } from "@liveblocks/react/suspense"
 import { LiveObject } from "@liveblocks/client"
 import { Cursors } from "./cursors"
+import { runFlowAudit } from "@/lib/flow-audit"
+import { AuditDialog } from "./audit-dialog"
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
@@ -135,6 +137,9 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
 
+  // audit state
+  const [auditOpen, setAuditOpen] = useState(false)
+
   // flow management
   const [flows, setFlows] = useState<FlowSummary[]>(initialFlows)
   const activeFlowId = initialFlow?.id ?? null
@@ -147,6 +152,20 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
 
   const sim = useSimulator({ nodes, edges })
   const updateMyPresence = useUpdateMyPresence()
+
+  // audit report (memoized)
+  const auditReport = useMemo(() => runFlowAudit(nodes as BotNode[], edges as BotEdge[]), [nodes, edges])
+
+  const handleFocusNode = useCallback(
+    (nodeId: string) => {
+      const targetNode = nodes.find((n) => n.id === nodeId)
+      if (targetNode) {
+        setSelectedId(nodeId)
+        setCenter(targetNode.position.x + 120, targetNode.position.y + 60, { zoom: 1.2, duration: 700 })
+      }
+    },
+    [nodes, setCenter],
+  )
 
   // ---- autosave (debounced) ----
   useEffect(() => {
@@ -510,6 +529,8 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
             activeFlowId={activeFlowId}
             saveStatus={saveStatus}
             switching={switching}
+            auditIssueCount={auditReport.criticalCount + auditReport.warningCount}
+            onAudit={() => setAuditOpen(true)}
             onSelect={handleSelectFlow}
             onCreate={handleCreateFlow}
             onRename={handleRenameFlow}
