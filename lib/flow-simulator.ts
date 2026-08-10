@@ -94,14 +94,22 @@ export function extractFlowPaths(
     const newVisited = new Set(visited)
     newVisited.add(currentId)
 
-    // Filtrar cables de opciones marcadas como "Volver atrás" para no generar bucles innecesarios en el panel
+    // Filtrar cables de opciones marcadas como "Volver atrás" o cables fantasma por defecto
     let validEdges = outEdges
-    if (node.data?.kind === "question" && Array.isArray(node.data.options)) {
+    
+    // Si el nodo es una pregunta con opciones, ignorar el cable por defecto y botones de volver atrás
+    if (node.data?.kind === "question" && Array.isArray(node.data.options) && node.data.options.length > 0) {
       validEdges = outEdges.filter((edge) => {
+        if (!edge.sourceHandle) return false // Ignorar cable por defecto porque en runtime se esperan opciones
         const opt = node.data.options!.find((o: any) => o.id === edge.sourceHandle)
-        if (opt && opt.isBack) return false
+        if (!opt || opt.isBack) return false
         return true
       })
+    } else if (node.data?.kind === "condition" && Array.isArray(node.data.branches) && node.data.branches.length > 0) {
+      // Ignorar cables por defecto en nodos de condición si tienen ramas
+      validEdges = outEdges.filter((edge) => !!edge.sourceHandle)
+    } else if (node.data?.kind === "date_condition" && Array.isArray(node.data.dateBranches) && node.data.dateBranches.length > 0) {
+      validEdges = outEdges.filter((edge) => !!edge.sourceHandle)
     }
 
     // Ordenar los cables para un recorrido consistente
