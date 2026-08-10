@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { BotNode, BotEdge, ConditionBranch, ConditionRule } from "./flow-types"
+import type { FlowPath } from "./flow-simulator"
 
 export interface ChatMessage {
   id: string
@@ -367,6 +368,48 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     }, 100)
   }, [advance])
 
+  const playPath = useCallback((path: FlowPath) => {
+    clearTimers()
+    counter = 0
+    varsRef.current = {}
+    menuHistoryRef.current = []
+    setVariables({})
+    setMessages([])
+    setVisitedNodeIds(new Set())
+    setAwaiting(null)
+    setActiveNodeId(null)
+    setIsTyping(false)
+    setIsRunning(true)
+
+    pushMessage("system", `Reproduciendo camino con ${path.steps.length} pasos...`)
+
+    let delay = 300
+    path.steps.forEach((step, index) => {
+      schedule(() => {
+        visit(step.nodeId)
+        const node = getNode(step.nodeId)
+        if (node) {
+          if (node.data.kind === "message" || node.data.kind === "question") {
+            pushMessage("bot", interpolate(node.data.text ?? "", varsRef.current))
+          }
+          if (step.action) {
+            pushMessage("user", step.action)
+          }
+        }
+
+        if (index === path.steps.length - 1) {
+          schedule(() => {
+            setIsRunning(false)
+            setActiveNodeId(null)
+            pushMessage("system", "Reproducción finalizada.")
+          }, 800)
+        }
+      }, delay)
+      delay += 800
+    })
+  }, [])
+
+
   const checkKeywordJump = useCallback(
     (text: string): boolean => {
       const match = findMatchingKeywordNode(text, nodesRef.current)
@@ -518,7 +561,10 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     start,
     reset,
     startFrom,
+    playPath,
+    checkKeywordJump,
     chooseOption,
     submitInput,
   }
 }
+

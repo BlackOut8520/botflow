@@ -1,8 +1,9 @@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
-import { Route, CheckCircle2, XCircle, RefreshCw, AlertTriangle, ArrowRight } from "lucide-react"
+import { Route, CheckCircle2, XCircle, RefreshCw, AlertTriangle, ArrowRight, Play } from "lucide-react"
 import { FlowPath } from "@/lib/flow-simulator"
+import { useSimulation } from "./simulation-context"
 
 interface PathsPanelProps {
   paths: FlowPath[]
@@ -10,6 +11,8 @@ interface PathsPanelProps {
 }
 
 export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
+  const { playPath } = useSimulation()
+
   const getStatusBadge = (status: FlowPath["status"]) => {
     switch (status) {
       case "end":
@@ -74,6 +77,18 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
                       </div>
                     </div>
                   ))}
+                  
+                  {playPath && (
+                    <div className="mt-4 flex justify-end pr-2">
+                      <button
+                        onClick={() => playPath(path)}
+                        className="flex items-center gap-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-md shadow-sm transition-colors"
+                      >
+                        <Play className="w-3 h-3" />
+                        Simular camino
+                      </button>
+                    </div>
+                  )}
                 </div>
               </AccordionContent>
             </AccordionItem>
