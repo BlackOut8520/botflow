@@ -16,8 +16,10 @@ interface SimulatorProps {
   variables: Record<string, string>
   simulatedDay: number
   simulatedMonth: number
+  simulatedYear: number
   onSimulatedDayChange: (day: number) => void
   onSimulatedMonthChange: (month: number) => void
+  onSimulatedYearChange: (year: number) => void
   onStart: () => void
   onReset: () => void
   onChooseOption: (id: string, label: string) => void
@@ -32,8 +34,10 @@ export function Simulator({
   variables,
   simulatedDay,
   simulatedMonth,
+  simulatedYear,
   onSimulatedDayChange,
   onSimulatedMonthChange,
+  onSimulatedYearChange,
   onStart,
   onReset,
   onChooseOption,
@@ -81,25 +85,35 @@ export function Simulator({
       </div>
 
       {/* date selector for testing */}
-      <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-4 py-2">
-        <span className="text-[11px] font-medium text-muted-foreground shrink-0">Simular fecha:</span>
+      <div className="flex items-center gap-1.5 border-b border-border bg-muted/20 px-3 py-2">
+        <span className="text-[11px] font-medium text-muted-foreground shrink-0">Fecha:</span>
         <input
           type="number"
           min={1} max={31}
           value={simulatedDay}
           onChange={(e) => onSimulatedDayChange(Math.min(31, Math.max(1, Number(e.target.value))))}
-          className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          className="h-7 w-10 rounded-md border border-border bg-background px-1 text-center text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          title="Día"
         />
         <span className="text-[11px] text-muted-foreground">de</span>
         <select
           value={simulatedMonth}
           onChange={(e) => onSimulatedMonthChange(Number(e.target.value))}
-          className="h-7 flex-1 rounded-md border border-border bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          className="h-7 min-w-24 rounded-md border border-border bg-background px-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          title="Mes"
         >
-          {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m, i) => (
+          {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"].map((m, i) => (
             <option key={i + 1} value={i + 1}>{m}</option>
           ))}
         </select>
+        <span className="text-[11px] text-muted-foreground">del</span>
+        <input
+          type="number"
+          value={simulatedYear}
+          onChange={(e) => onSimulatedYearChange(Number(e.target.value))}
+          className="h-7 w-16 rounded-md border border-border bg-background px-1 text-center text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+          title="Año"
+        />
       </div>
 
       {/* variables bar */}

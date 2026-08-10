@@ -10,8 +10,10 @@ export interface QuestionOption {
   /** Si se define, la opción solo aparece cuando la fecha actual está en el rango */
   startDay?: number    // 1-31
   startMonth?: number  // 1-12
+  startYear?: number   // ej. 2026
   endDay?: number      // 1-31
   endMonth?: number    // 1-12
+  endYear?: number     // ej. 2027
 }
 
 /** Una sola condición dentro de una rama */
@@ -41,8 +43,10 @@ export interface DateBranch {
   label: string
   startDay: number    // 1-31
   startMonth: number  // 1-12
+  startYear?: number  // ej. 2026
   endDay: number      // 1-31
   endMonth: number    // 1-12
+  endYear?: number    // ej. 2027
 }
 
 export interface BotNodeData {

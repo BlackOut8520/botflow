@@ -247,6 +247,11 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                                 <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                                 <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                               </Select>
+                              <input type="number" placeholder="Año" value={o.startYear ?? ""}
+                                onChange={(e) => updateOption(o.id, { startYear: e.target.value ? Number(e.target.value) : undefined })}
+                                className="h-7 w-16 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                                title="Año de inicio opcional"
+                              />
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Label className="text-[10px] w-10 shrink-0">Hasta</Label>
@@ -258,6 +263,11 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                                 <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                                 <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                               </Select>
+                              <input type="number" placeholder="Año" value={o.endYear ?? ""}
+                                onChange={(e) => updateOption(o.id, { endYear: e.target.value ? Number(e.target.value) : undefined })}
+                                className="h-7 w-16 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                                title="Año de fin opcional"
+                              />
                             </div>
                           </div>
                         )}
@@ -420,7 +430,7 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                El bot revisará el mes actual y tomará el camino del primer periodo que coincida.
+                El bot revisará la fecha actual y tomará el camino del primer periodo coincidente. Puedes especificar el año si el periodo abarca años específicos (ej. Nov 2026 – Abr 2027).
               </p>
               {dateBranches.map((b) => (
                 <div key={b.id} className="space-y-2 rounded-lg border border-border bg-muted/30 p-2.5">
@@ -450,6 +460,11 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                         <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                         <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                       </Select>
+                      <input type="number" placeholder="Año" value={b.startYear ?? ""}
+                        onChange={(e) => updateDB(b.id, { startYear: e.target.value ? Number(e.target.value) : undefined })}
+                        className="h-7 w-16 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                        title="Año de inicio opcional"
+                      />
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Label className="text-[10px] w-10 shrink-0">Hasta</Label>
@@ -461,6 +476,11 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                         <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                         <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                       </Select>
+                      <input type="number" placeholder="Año" value={b.endYear ?? ""}
+                        onChange={(e) => updateDB(b.id, { endYear: e.target.value ? Number(e.target.value) : undefined })}
+                        className="h-7 w-16 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                        title="Año de fin opcional"
+                      />
                     </div>
                   </div>
                 </div>

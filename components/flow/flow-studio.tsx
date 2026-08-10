@@ -621,8 +621,10 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
                 variables={sim.variables}
                 simulatedDay={sim.simulatedDay}
                 simulatedMonth={sim.simulatedMonth}
+                simulatedYear={sim.simulatedYear}
                 onSimulatedDayChange={sim.setSimulatedDay}
                 onSimulatedMonthChange={sim.setSimulatedMonth}
+                onSimulatedYearChange={sim.setSimulatedYear}
                 onStart={sim.start}
                 onReset={sim.reset}
                 onChooseOption={sim.chooseOption}

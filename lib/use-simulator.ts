@@ -69,6 +69,57 @@ function evalBranch(b: ConditionBranch, vars: Record<string, string>): boolean {
   return false
 }
 
+export interface DateRangeQuery {
+  startDay?: number
+  startMonth?: number
+  startYear?: number
+  endDay?: number
+  endMonth?: number
+  endYear?: number
+}
+
+export function evalDateRange(
+  range: DateRangeQuery,
+  simDay: number,
+  simMonth: number,
+  simYear: number,
+): boolean {
+  if (!range.startMonth || !range.endMonth) return true
+
+  const startDay = range.startDay ?? 1
+  const startMonth = range.startMonth
+  const endDay = range.endDay ?? 31
+  const endMonth = range.endMonth
+
+  const hasStartYear = range.startYear != null && range.startYear > 0
+  const hasEndYear = range.endYear != null && range.endYear > 0
+
+  if (hasStartYear || hasEndYear) {
+    const sYear = hasStartYear ? range.startYear! : (hasEndYear ? range.endYear! : simYear)
+    let eYear = hasEndYear ? range.endYear! : sYear
+
+    if (hasStartYear && !hasEndYear && startMonth > endMonth) {
+      eYear = sYear + 1
+    }
+
+    const startVal = sYear * 10000 + startMonth * 100 + startDay
+    const endVal = eYear * 10000 + endMonth * 100 + endDay
+    const curVal = simYear * 10000 + simMonth * 100 + simDay
+
+    return curVal >= startVal && curVal <= endVal
+  }
+
+  const startVal = startMonth * 100 + startDay
+  const endVal = endMonth * 100 + endDay
+  const curVal = simMonth * 100 + simDay
+
+  if (startVal <= endVal) {
+    return curVal >= startVal && curVal <= endVal
+  } else {
+    return curVal >= startVal || curVal <= endVal
+  }
+}
+
 function findMatchingKeywordNode(text: string, nodes: BotNode[]): { node: BotNode; matchedKeyword: string } | null {
   const normalizedText = text.toLowerCase().trim()
   if (!normalizedText) return null
@@ -113,6 +164,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
   const now = new Date()
   const [simulatedDay, setSimulatedDay] = useState<number>(now.getDate())
   const [simulatedMonth, setSimulatedMonth] = useState<number>(now.getMonth() + 1)
+  const [simulatedYear, setSimulatedYear] = useState<number>(now.getFullYear())
 
   // keep latest graph + vars + menu history in refs so scheduled callbacks stay fresh
   const nodesRef = useRef(nodes)
@@ -192,15 +244,9 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         schedule(() => {
           setIsTyping(false)
           if (data.text) pushMessage("bot", interpolate(data.text, varsRef.current))
-          const cd = simulatedDay, cm = simulatedMonth
-          const cur = cm * 100 + cd
-          const visibleOptions = (data.options ?? []).filter((o) => {
-            if (!o.startMonth || !o.endMonth) return true
-            const s = o.startMonth * 100 + (o.startDay ?? 1)
-            const e = o.endMonth * 100 + (o.endDay ?? 31)
-            if (s <= e) return cur >= s && cur <= e
-            return cur >= s || cur <= e
-          })
+          const visibleOptions = (data.options ?? []).filter((o) =>
+            evalDateRange(o, simulatedDay, simulatedMonth, simulatedYear)
+          )
           if (visibleOptions.length === 0) {
             pushMessage("system", "Ninguna opción disponible para este periodo. Fin del recorrido.")
             setIsRunning(false)
@@ -238,17 +284,11 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
       }
       case "date_condition": {
         const MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
-        const cd = simulatedDay, cm = simulatedMonth
-        const cur = cm * 100 + cd
-        pushMessage("system", `Verificando fecha: ${cd} de ${MONTH_NAMES[cm - 1]}`)
+        const cd = simulatedDay, cm = simulatedMonth, cy = simulatedYear
+        pushMessage("system", `Verificando fecha: ${cd} de ${MONTH_NAMES[cm - 1]} de ${cy}`)
         schedule(() => {
           const dateBranches = data.dateBranches ?? []
-          const match = dateBranches.find((b) => {
-            const s = b.startMonth * 100 + (b.startDay ?? 1)
-            const e = b.endMonth * 100 + (b.endDay ?? 31)
-            if (s <= e) return cur >= s && cur <= e
-            return cur >= s || cur <= e
-          })
+          const match = dateBranches.find((b) => evalDateRange(b, cd, cm, cy))
           if (match) {
             pushMessage("system", `Periodo activo: ${match.label}`)
             advance(getTarget(nodeId, match.id))
@@ -275,7 +315,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         break
       }
     }
-  }, [simulatedDay, simulatedMonth])
+  }, [simulatedDay, simulatedMonth, simulatedYear])
 
   const start = useCallback(() => {
     clearTimers()
@@ -471,8 +511,10 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     isTyping,
     simulatedDay,
     simulatedMonth,
+    simulatedYear,
     setSimulatedDay,
     setSimulatedMonth,
+    setSimulatedYear,
     start,
     reset,
     startFrom,
