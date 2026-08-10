@@ -15,7 +15,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog"
-import { Plus, Pencil, Trash2, Check, X, Loader2, CloudCheck, Cloud, Save, Download, Upload, Users, AlertOctagon } from "lucide-react"
+import { Plus, Pencil, Trash2, Check, X, Loader2, CloudCheck, Cloud, Save, Download, Upload, Users, AlertOctagon, Route } from "lucide-react"
 import { useOthers } from "@liveblocks/react/suspense"
 import { cn } from "@/lib/utils"
 
@@ -92,6 +92,7 @@ interface FlowBarProps {
   onSave: () => void
   onExport: () => void
   onImport: (name: string, nodes: any[], edges: any[]) => void
+  onSimulate?: () => void
 }
 
 export function FlowBar({
@@ -108,6 +109,7 @@ export function FlowBar({
   onSave,
   onExport,
   onImport,
+  onSimulate,
 }: FlowBarProps) {
   const active = flows.find((f) => f.id === activeFlowId) ?? null
   const [editing, setEditing] = useState(false)
@@ -254,6 +256,19 @@ export function FlowBar({
                   {auditIssueCount}
                 </span>
               )}
+            </Button>
+          )}
+
+          {onSimulate && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 border-indigo-500/40 hover:border-indigo-500 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+              onClick={onSimulate}
+              title="Abrir simulador de caminos"
+            >
+              <Route className="size-4" />
+              Caminos
             </Button>
           )}
 

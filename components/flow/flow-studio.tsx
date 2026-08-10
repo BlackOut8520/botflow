@@ -49,6 +49,8 @@ import { Cursors } from "./cursors"
 import { runFlowAudit } from "@/lib/flow-audit"
 import { AuditDialog } from "./audit-dialog"
 import { AuditPanel } from "./audit-panel"
+import { extractFlowPaths, type FlowPath } from "@/lib/flow-simulator"
+import { PathSimulatorDialog } from "./path-simulator-dialog"
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
@@ -140,6 +142,11 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
 
   // audit state
   const [auditOpen, setAuditOpen] = useState(false)
+
+  // simulator state
+  const [simulatorOpen, setSimulatorOpen] = useState(false)
+  const [simulatorPaths, setSimulatorPaths] = useState<FlowPath[]>([])
+  const [simulatorHasMore, setSimulatorHasMore] = useState(false)
 
   // flow management
   const [flows, setFlows] = useState<FlowSummary[]>(initialFlows)
@@ -431,6 +438,13 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
     [loadFlow],
   )
 
+  const handleSimulate = useCallback(() => {
+    const { paths, hasMore } = extractFlowPaths(nodes as BotNode[], edges as BotEdge[])
+    setSimulatorPaths(paths)
+    setSimulatorHasMore(hasMore)
+    setSimulatorOpen(true)
+  }, [nodes, edges])
+
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     const node = params.nodes[0]
     const edge = params.edges[0]
@@ -536,6 +550,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
             onSave={handleSaveNow}
             onExport={handleExportFlow}
             onImport={handleImportFlow}
+            onSimulate={handleSimulate}
           />
         </header>
 
@@ -674,6 +689,12 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
           )}
         </div>
       </div>
+      <PathSimulatorDialog 
+        open={simulatorOpen} 
+        onOpenChange={setSimulatorOpen} 
+        paths={simulatorPaths}
+        hasMore={simulatorHasMore}
+      />
     </SimulationContext.Provider>
   )
 }
