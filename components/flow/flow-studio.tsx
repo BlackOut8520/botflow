@@ -48,6 +48,7 @@ import { LiveObject } from "@liveblocks/client"
 import { Cursors } from "./cursors"
 import { runFlowAudit } from "@/lib/flow-audit"
 import { AuditDialog } from "./audit-dialog"
+import { AuditPanel } from "./audit-panel"
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
@@ -133,7 +134,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
   
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
-  const [tab, setTab] = useState<"blocks" | "props">("blocks")
+  const [tab, setTab] = useState<"blocks" | "props" | "audit">("blocks")
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
 
@@ -161,6 +162,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
       const targetNode = nodes.find((n) => n.id === nodeId)
       if (targetNode) {
         setSelectedId(nodeId)
+        setTab("props")
         setCenter(targetNode.position.x + 120, targetNode.position.y + 60, { zoom: 1.2, duration: 700 })
       }
     },
@@ -429,22 +431,6 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
     [loadFlow],
   )
 
-  const onDrop = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault()
-      const kind = event.dataTransfer.getData("application/flow-node") as NodeKind
-      if (!kind) return
-      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-      addNode(kind, position)
-    },
-    [screenToFlowPosition, addNode],
-  )
-
-  const onDragOver = useCallback((event: React.DragEvent) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = "move"
-  }, [])
-
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     const node = params.nodes[0]
     const edge = params.edges[0]
@@ -539,7 +525,10 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
             saveStatus={saveStatus}
             switching={switching}
             auditIssueCount={auditReport.criticalCount + auditReport.warningCount}
-            onAudit={() => setAuditOpen(true)}
+            onAudit={() => {
+              setLeftOpen(true)
+              setTab("audit")
+            }}
             onSelect={handleSelectFlow}
             onCreate={handleCreateFlow}
             onRename={handleRenameFlow}
@@ -551,14 +540,22 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
         </header>
 
         <div className="flex min-h-0 flex-1">
-          {/* left sidebar: blocks / properties */}
+          {/* left sidebar: blocks / properties / audit */}
           {leftOpen && (
             <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-card">
-              <Tabs value={tab} onValueChange={(v) => setTab(v as "blocks" | "props")} className="flex min-h-0 flex-1 flex-col">
+              <Tabs value={tab} onValueChange={(v) => setTab(v as "blocks" | "props" | "audit")} className="flex min-h-0 flex-1 flex-col">
                 <div className="border-b border-border px-3 pt-3">
                   <TabsList className="w-full">
-                    <TabsTrigger value="blocks" className="flex-1">Bloques</TabsTrigger>
-                    <TabsTrigger value="props" className="flex-1">Propiedades</TabsTrigger>
+                    <TabsTrigger value="blocks" className="flex-1 text-xs">Bloques</TabsTrigger>
+                    <TabsTrigger value="props" className="flex-1 text-xs">Propiedades</TabsTrigger>
+                    <TabsTrigger value="audit" className="flex-1 text-xs gap-1">
+                      Auditoría
+                      {(auditReport.criticalCount + auditReport.warningCount) > 0 && (
+                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white px-1">
+                          {auditReport.criticalCount + auditReport.warningCount}
+                        </span>
+                      )}
+                    </TabsTrigger>
                   </TabsList>
                 </div>
                 <TabsContent value="blocks" className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -566,6 +563,9 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
                 </TabsContent>
                 <TabsContent value="props" className="min-h-0 flex-1 overflow-hidden p-0">
                   <PropertiesPanel node={selectedNode} onChange={updateNodeData} onDelete={deleteNode} />
+                </TabsContent>
+                <TabsContent value="audit" className="min-h-0 flex-1 overflow-hidden p-0">
+                  <AuditPanel report={auditReport} onFocusNode={handleFocusNode} />
                 </TabsContent>
               </Tabs>
             </aside>
