@@ -2,6 +2,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Route, CheckCircle2, XCircle, RefreshCw, AlertTriangle, ArrowRight, Play } from "lucide-react"
+import { useState } from "react"
 import { FlowPath } from "@/lib/flow-simulator"
 import { useSimulation } from "./simulation-context"
 
@@ -12,6 +13,7 @@ interface PathsPanelProps {
 
 export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
   const { playPath } = useSimulation()
+  const [filter, setFilter] = useState<"all" | "end" | "issues">("all")
 
   const getStatusBadge = (status: FlowPath["status"]) => {
     switch (status) {
@@ -37,13 +39,33 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
           {paths.length} {hasMore ? "o más caminos" : "caminos detectados"}.
           {hasMore && " Mostrando solo 300."}
         </p>
+        <div className="mt-3 flex items-center gap-1 bg-muted p-1 rounded-md">
+          <button
+            onClick={() => setFilter("all")}
+            className={`flex-1 text-[10px] font-medium py-1 rounded transition-colors ${filter === "all" ? "bg-background shadow-sm" : "text-muted-foreground hover:bg-background/50"}`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setFilter("end")}
+            className={`flex-1 text-[10px] font-medium py-1 rounded transition-colors ${filter === "end" ? "bg-background shadow-sm text-emerald-600" : "text-muted-foreground hover:bg-background/50"}`}
+          >
+            Completos
+          </button>
+          <button
+            onClick={() => setFilter("issues")}
+            className={`flex-1 text-[10px] font-medium py-1 rounded transition-colors ${filter === "issues" ? "bg-background shadow-sm text-amber-600" : "text-muted-foreground hover:bg-background/50"}`}
+          >
+            Incompletos
+          </button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
         <div className="p-3 pb-24">
           {/* @ts-ignore */}
           <Accordion type="single" collapsible={true as any} className="w-full space-y-2">
-          {paths.map((path, index) => (
+          {paths.filter(p => filter === "all" || (filter === "end" ? p.status === "end" : p.status !== "end")).map((path, index) => (
             <AccordionItem key={path.id} value={path.id} className="border bg-card rounded-md px-3 overflow-hidden shadow-sm">
               <AccordionTrigger className="hover:no-underline py-2.5">
                 <div className="flex items-center justify-between w-full pr-2 gap-2">
@@ -95,10 +117,10 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
           ))}
         </Accordion>
         
-        {paths.length === 0 && (
+        {paths.filter(p => filter === "all" || (filter === "end" ? p.status === "end" : p.status !== "end")).length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             <Route className="w-8 h-8 mx-auto mb-3 opacity-20" />
-            <p className="text-sm">No se encontraron caminos.</p>
+            <p className="text-sm">No hay caminos con este filtro.</p>
           </div>
         )}
         </div>

@@ -94,11 +94,18 @@ export function extractFlowPaths(
     const newVisited = new Set(visited)
     newVisited.add(currentId)
 
-    // Ordenar los cables para un recorrido consistente (basado en el orden de las opciones)
-    const sortedEdges = [...outEdges].sort((a, b) => {
-      // Si ambos tienen handle, intentamos preservar el orden original de las opciones/ramas
-      // Para esto simplificamos asumiendo que salen en orden de creación,
-      // pero para una lectura humana, con que sean procesados está bien.
+    // Filtrar cables de opciones marcadas como "Volver atrás" para no generar bucles innecesarios en el panel
+    let validEdges = outEdges
+    if (node.data?.kind === "question" && Array.isArray(node.data.options)) {
+      validEdges = outEdges.filter((edge) => {
+        const opt = node.data.options!.find((o: any) => o.id === edge.sourceHandle)
+        if (opt && opt.isBack) return false
+        return true
+      })
+    }
+
+    // Ordenar los cables para un recorrido consistente
+    const sortedEdges = [...validEdges].sort((a, b) => {
       return (a.sourceHandle || "").localeCompare(b.sourceHandle || "")
     })
 
