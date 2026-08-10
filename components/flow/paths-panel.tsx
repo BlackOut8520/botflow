@@ -27,7 +27,7 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-slate-50/30">
+    <div className="flex flex-1 flex-col bg-slate-50/30 min-h-0">
       <div className="border-b p-3 bg-card shrink-0">
         <h3 className="font-semibold text-sm flex items-center gap-2">
           <Route className="w-4 h-4 text-indigo-500" />
