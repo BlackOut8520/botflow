@@ -15,8 +15,9 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog"
-import { Plus, Pencil, Trash2, Check, X, Loader2, CloudCheck, Cloud, Save, Download, Upload, Users } from "lucide-react"
+import { Plus, Pencil, Trash2, Check, X, Loader2, CloudCheck, Cloud, Save, Download, Upload, Users, AlertOctagon } from "lucide-react"
 import { useOthers } from "@liveblocks/react/suspense"
+import { cn } from "@/lib/utils"
 
 export type SaveStatus = "idle" | "saving" | "saved"
 
