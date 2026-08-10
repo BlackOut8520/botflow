@@ -25,7 +25,7 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
 
   return (
     <div className="flex h-full flex-col bg-slate-50/30">
-      <div className="border-b p-3 bg-card">
+      <div className="border-b p-3 bg-card shrink-0">
         <h3 className="font-semibold text-sm flex items-center gap-2">
           <Route className="w-4 h-4 text-indigo-500" />
           Simulador de Caminos
@@ -36,9 +36,10 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
         </p>
       </div>
 
-      <ScrollArea className="flex-1 p-3">
-        {/* @ts-ignore */}
-        <Accordion type="single" collapsible={true as any} className="w-full space-y-2">
+      <ScrollArea className="flex-1">
+        <div className="p-3 pb-24">
+          {/* @ts-ignore */}
+          <Accordion type="single" collapsible={true as any} className="w-full space-y-2">
           {paths.map((path, index) => (
             <AccordionItem key={path.id} value={path.id} className="border bg-card rounded-md px-3 overflow-hidden shadow-sm">
               <AccordionTrigger className="hover:no-underline py-2.5">
@@ -85,6 +86,7 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
             <p className="text-sm">No se encontraron caminos.</p>
           </div>
         )}
+        </div>
       </ScrollArea>
     </div>
   )
