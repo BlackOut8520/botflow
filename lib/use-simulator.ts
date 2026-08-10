@@ -389,11 +389,11 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         visit(step.nodeId)
         const node = getNode(step.nodeId)
         if (node) {
-          if (node.data.kind === "message" || node.data.kind === "question") {
-            pushMessage("bot", interpolate(node.data.text ?? "", varsRef.current))
-          }
           if (step.action) {
             pushMessage("user", step.action)
+          }
+          if (node.data.kind === "message" || node.data.kind === "question") {
+            pushMessage("bot", interpolate(node.data.text ?? "", varsRef.current))
           }
         }
 
