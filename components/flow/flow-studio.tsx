@@ -603,7 +603,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
 
             <div
               ref={wrapperRef}
-              className="relative min-h-0 flex-1 nodrag nopan"
+              className="relative min-h-0 flex-1"
               onPointerMoveCapture={(e) => {
                 if (!wrapperRef.current) return
                 const now = Date.now()
