@@ -1,9 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { AlertTriangle, CheckCircle2, Info, Locate, AlertOctagon, HelpCircle, Filter } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Info, Locate, AlertOctagon, HelpCircle, Filter, X } from "lucide-react"
 import type { AuditReport, AuditIssue, IssueCategory } from "@/lib/flow-audit"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -18,6 +17,8 @@ interface AuditDialogProps {
 export function AuditDialog({ open, onOpenChange, report, onFocusNode }: AuditDialogProps) {
   const [activeFilter, setActiveFilter] = useState<IssueCategory | "all">("all")
 
+  if (!open) return null
+
   const filteredIssues = report.issues.filter((issue) => {
     if (activeFilter === "all") return true
     return issue.category === activeFilter
@@ -26,23 +27,37 @@ export function AuditDialog({ open, onOpenChange, report, onFocusNode }: AuditDi
   const healthScore = Math.max(0, 100 - report.criticalCount * 10 - report.warningCount * 3)
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onOpenChange(false)
+      }}
+    >
+      <div className="relative w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden text-foreground">
         {/* Header */}
-        <DialogHeader className="p-5 border-b border-border bg-card">
-          <div className="flex items-center justify-between gap-4">
+        <div className="p-5 border-b border-border bg-card relative">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+            title="Cerrar auditoría"
+          >
+            <X className="size-4" />
+          </button>
+
+          <div className="flex items-center justify-between gap-4 pr-8">
             <div>
-              <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <h2 className="text-lg font-bold flex items-center gap-2">
                 <AlertOctagon className="size-5 text-primary" />
                 Auditoría y Diagnóstico del Flujo
-              </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground mt-1">
+              </h2>
+              <p className="text-xs text-muted-foreground mt-1">
                 Inspección automática de salud del diagrama ({report.totalNodes} nodos, {report.totalEdges} conexiones)
-              </DialogDescription>
+              </p>
             </div>
 
             {/* Health Score Badge */}
-            <div className="flex items-center gap-3 bg-muted/40 px-3 py-1.5 rounded-lg border border-border">
+            <div className="flex items-center gap-3 bg-muted/40 px-3 py-1.5 rounded-lg border border-border shrink-0">
               <div className="text-right">
                 <span className="text-[10px] uppercase font-semibold text-muted-foreground block">Salud del Flujo</span>
                 <span
@@ -83,12 +98,12 @@ export function AuditDialog({ open, onOpenChange, report, onFocusNode }: AuditDi
             <div className="flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1.5">
               <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
               <div>
-                <p className="text-[10px] font-semibold uppercase text-emerald-600 dark:text-emerald-400">Total Leídos</p>
+                <p className="text-[10px] font-semibold uppercase text-emerald-600 dark:text-emerald-400">Total Nodos</p>
                 <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{report.totalNodes}</p>
               </div>
             </div>
           </div>
-        </DialogHeader>
+        </div>
 
         {/* Filter Tabs */}
         <div className="flex items-center gap-1.5 px-5 py-2 border-b border-border bg-muted/20 overflow-x-auto">
@@ -118,9 +133,9 @@ export function AuditDialog({ open, onOpenChange, report, onFocusNode }: AuditDi
           {filteredIssues.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <CheckCircle2 className="size-12 text-emerald-500 mb-2" />
-              <p className="text-sm font-semibold text-foreground">¡Sin problemas detectados!</p>
+              <p className="text-sm font-semibold text-foreground">¡Sin problemas detectados en esta categoría!</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                No hay observaciones en esta categoría. Tu diagrama cumple con las mejores prácticas de flujo.
+                Tu diagrama cumple con las mejores prácticas de flujo.
               </p>
             </div>
           ) : (
@@ -174,7 +189,7 @@ export function AuditDialog({ open, onOpenChange, report, onFocusNode }: AuditDi
             ))
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }
