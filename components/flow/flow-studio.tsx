@@ -479,13 +479,22 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNodeId])
 
+  const lastCursorTimeRef = useRef(0)
+
   // colorize edges by source node kind (and highlight active/visited path)
+  const nodeColorMap = useMemo(() => {
+    const map = new Map<string, string>()
+    nodes.forEach((n) => {
+      map.set(n.id, NODE_VAR[n.data.kind] ?? "var(--muted-foreground)")
+    })
+    return map
+  }, [nodes])
+
   const styledEdges = useMemo(
     () =>
       edges.map((e) => {
         const active = sim.visitedNodeIds.has(e.source) && sim.visitedNodeIds.has(e.target)
-        const sourceNode = nodes.find((n) => n.id === e.source)
-        const sourceColor = sourceNode ? NODE_VAR[sourceNode.data.kind] : "var(--muted-foreground)"
+        const sourceColor = nodeColorMap.get(e.source) ?? "var(--muted-foreground)"
         const isSelected = e.id === selectedEdgeId
         // sim running → animado con color primario
         if (active && sim.isRunning) {
@@ -498,7 +507,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
         // sin simulación → color del nodo origen
         return { ...e, selected: isSelected, animated: false, style: { stroke: sourceColor, strokeWidth: 2.5, opacity: 0.75 } }
       }),
-    [edges, nodes, sim.visitedNodeIds, sim.isRunning, selectedEdgeId],
+    [edges, nodeColorMap, sim.visitedNodeIds, sim.isRunning, selectedEdgeId],
   )
 
   const simContextValue = useMemo(
@@ -562,44 +571,71 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
             </aside>
           )}
 
-          {/* center: canvas */}
-          <div
-            ref={wrapperRef}
-            className="relative min-w-0 flex-1"
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onPointerMoveCapture={(e) => {
-              const wrapper = wrapperRef.current
-              if (!wrapper) return
-              const position = screenToFlowPosition({
-                x: e.clientX,
-                y: e.clientY,
-              })
-              updateMyPresence({ cursor: position })
-            }}
-            onPointerLeaveCapture={() => updateMyPresence({ cursor: null })}
-          >
-            <ReactFlow
-              nodes={flowNodes}
-              edges={styledEdges}
-              onNodesChange={handleNodesChange}
-              onEdgesChange={handleEdgesChange}
-              onConnect={onConnect}
-              onSelectionChange={onSelectionChange}
-              onEdgeClick={(_, edge) => setSelectedEdgeId(edge.id)}
-              onPaneClick={() => {
-                setSelectedId(null)
-                setSelectedEdgeId(null)
+          {/* center canvas */}
+          <main className="relative flex min-w-0 flex-1 flex-col">
+            <div className="flex items-center justify-between border-b border-border bg-card/50 px-3 py-1.5 backdrop-blur">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setLeftOpen((o) => !o)}
+                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                  title={leftOpen ? "Ocultar panel izquierdo" : "Mostrar panel izquierdo"}
+                >
+                  {leftOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+                </button>
+
+                {selectedNode && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    Seleccionado: <strong className="font-semibold text-foreground">{selectedNode.data.label}</strong>
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setRightOpen((o) => !o)}
+                className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                title={rightOpen ? "Ocultar simulador" : "Mostrar simulador"}
+              >
+                {rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+              </button>
+            </div>
+
+            <div
+              ref={wrapperRef}
+              className="relative min-h-0 flex-1 nodrag nopan"
+              onPointerMoveCapture={(e) => {
+                if (!wrapperRef.current) return
+                const now = Date.now()
+                if (now - lastCursorTimeRef.current < 40) return
+                lastCursorTimeRef.current = now
+                const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+                updateMyPresence({ cursor: position })
               }}
-              nodeTypes={nodeTypes}
-              edgeTypes={edgeTypes}
-              fitView
-              fitViewOptions={{ padding: 0.2, minZoom: 0.005 }}
-              minZoom={0.005}
-              maxZoom={3}
-              proOptions={{ hideAttribution: true }}
-              defaultEdgeOptions={{ style: { strokeWidth: 3 } }}
+              onPointerLeaveCapture={() => updateMyPresence({ cursor: null })}
             >
+              <ReactFlow
+                nodes={flowNodes}
+                edges={styledEdges}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={handleEdgesChange}
+                onConnect={onConnect}
+                onSelectionChange={onSelectionChange}
+                onEdgeClick={(_, edge) => setSelectedEdgeId(edge.id)}
+                onPaneClick={() => {
+                  setSelectedId(null)
+                  setSelectedEdgeId(null)
+                }}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                onlyRenderVisibleElements={true}
+                fitView
+                fitViewOptions={{ padding: 0.2, minZoom: 0.005 }}
+                minZoom={0.005}
+                maxZoom={3}
+                proOptions={{ hideAttribution: true }}
+                defaultEdgeOptions={{ style: { strokeWidth: 3 } }}
+              >
               <Cursors />
               <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} className="text-border" />
               <Controls className="!border-border !bg-card !shadow-sm [&_button]:!border-border [&_button]:!bg-card [&_button]:!fill-foreground [&_button:hover]:!bg-accent" />
