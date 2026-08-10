@@ -515,8 +515,9 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
       isRunning: sim.isRunning,
       startFrom: sim.startFrom,
       duplicateNode,
+      playPath: sim.playPath,
     }),
-    [sim.activeNodeId, sim.visitedNodeIds, sim.isRunning, sim.startFrom, duplicateNode],
+    [sim.activeNodeId, sim.visitedNodeIds, sim.isRunning, sim.startFrom, duplicateNode, sim.playPath],
   )
 
   return (
