@@ -636,36 +636,19 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
                 proOptions={{ hideAttribution: true }}
                 defaultEdgeOptions={{ style: { strokeWidth: 3 } }}
               >
-              <Cursors />
-              <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} className="text-border" />
-              <Controls className="!border-border !bg-card !shadow-sm [&_button]:!border-border [&_button]:!bg-card [&_button]:!fill-foreground [&_button:hover]:!bg-accent" />
-              <MiniMap
-                pannable
-                zoomable
-                className="!bg-card"
-                nodeColor={(n) => NODE_VAR[(n.data as BotNodeData).kind] ?? "var(--muted)"}
-                maskColor="color-mix(in oklch, var(--background) 70%, transparent)"
-              />
-            </ReactFlow>
-
-            {/* toggle left panel button */}
-            <button
-              onClick={() => setLeftOpen((v) => !v)}
-              title={leftOpen ? "Ocultar panel izquierdo" : "Mostrar panel izquierdo"}
-              className="absolute left-2 top-2 z-10 flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
-            >
-              {leftOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
-            </button>
-
-            {/* toggle right panel button */}
-            <button
-              onClick={() => setRightOpen((v) => !v)}
-              title={rightOpen ? "Ocultar simulador" : "Mostrar simulador"}
-              className="absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
-            >
-              {rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
-            </button>
-          </div>
+                <Cursors />
+                <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} className="text-border" />
+                <Controls className="!border-border !bg-card !shadow-sm [&_button]:!border-border [&_button]:!bg-card [&_button]:!fill-foreground [&_button:hover]:!bg-accent" />
+                <MiniMap
+                  pannable
+                  zoomable
+                  className="!bg-card"
+                  nodeColor={(n) => NODE_VAR[(n.data as BotNodeData).kind] ?? "var(--muted)"}
+                  maskColor="color-mix(in oklch, var(--background) 70%, transparent)"
+                />
+              </ReactFlow>
+            </div>
+          </main>
 
           {/* right: simulator */}
           {rightOpen && (
