@@ -151,6 +151,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
   const [switching, setSwitching] = useState(false)
   const dirtyRef = useRef(false)
+  const [pathNames, setPathNames] = useState<Record<string, string>>(initialFlow?.pathNames ?? {})
 
   const wrapperRef = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition, setCenter } = useReactFlow()
@@ -181,7 +182,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
     if (!activeFlowId || !dirtyRef.current) return
     setSaveStatus("saving")
     const t = setTimeout(async () => {
-      await saveFlow(activeFlowId, nodes, edges)
+      await saveFlow(activeFlowId, nodes, edges, pathNames)
       dirtyRef.current = false
       setSaveStatus("saved")
     }, 800)
@@ -196,7 +197,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
   const handleSaveNow = useCallback(async () => {
     if (!activeFlowId) return
     setSaveStatus("saving")
-    await saveFlow(activeFlowId, nodes, edges)
+    await saveFlow(activeFlowId, nodes, edges, pathNames)
     dirtyRef.current = false
     setSaveStatus("saved")
   }, [activeFlowId, nodes, edges])
@@ -583,7 +584,19 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
                   <AuditPanel report={auditReport} onFocusNode={handleFocusNode} />
                 </TabsContent>
                 <TabsContent value="paths" className="min-h-0 flex-1 h-full w-full overflow-hidden p-0 m-0 flex flex-col">
-                  <PathsPanel paths={simulatorReport.paths} hasMore={simulatorReport.hasMore} />
+                  <PathsPanel 
+                    paths={simulatorReport.paths} 
+                    hasMore={simulatorReport.hasMore} 
+                    pathNames={pathNames}
+                    onRenamePath={(pathId, newName) => {
+                      setPathNames(prev => {
+                        const next = { ...prev, [pathId]: newName }
+                        if (!newName) delete next[pathId]
+                        return next
+                      })
+                      markDirty()
+                    }}
+                  />
                 </TabsContent>
               </Tabs>
             </aside>

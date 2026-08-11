@@ -8,9 +8,58 @@ import { useSimulation } from "./simulation-context"
 interface PathsPanelProps {
   paths: FlowPath[]
   hasMore: boolean
+  pathNames?: Record<string, string>
+  onRenamePath?: (pathId: string, newName: string) => void
 }
 
-export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
+function EditablePathName({ path, pathName, onRename, index }: { path: FlowPath, pathName?: string, onRename?: (id: string, name: string) => void, index: number }) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(pathName || "")
+  const defaultName = path.steps.length > 0 ? path.steps[0].nodeLabel : "Vacío"
+  const displayName = pathName || defaultName
+
+  return (
+    <div className="flex-1 min-w-0 flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+      <span className="text-muted-foreground font-mono text-xs shrink-0">#{index + 1}</span>
+      {editing ? (
+        <input 
+          autoFocus
+          className="flex-1 min-w-0 bg-background border px-1.5 py-0.5 text-xs rounded text-foreground outline-none ring-1 ring-ring"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter") {
+              setEditing(false)
+              if (onRename && value !== pathName) onRename(path.id, value)
+            } else if (e.key === "Escape") {
+              setEditing(false)
+              setValue(pathName || "")
+            }
+          }}
+          onBlur={() => {
+            setEditing(false)
+            if (onRename && value !== pathName) onRename(path.id, value)
+          }}
+        />
+      ) : (
+        <span 
+          className="font-medium text-left truncate text-xs hover:bg-muted/60 px-1 py-0.5 -ml-1 rounded cursor-text transition-colors border border-transparent hover:border-border"
+          title="Clic para renombrar"
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            setValue(pathName || "")
+            setEditing(true)
+          }}
+        >
+          {displayName}
+        </span>
+      )}
+    </div>
+  )
+}
+
+export function PathsPanel({ paths, hasMore, pathNames, onRenamePath }: PathsPanelProps) {
   const { playPath } = useSimulation()
   const [filter, setFilter] = useState<"all" | "end" | "issues">("all")
 
@@ -67,10 +116,12 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
             <AccordionItem key={path.id} value={path.id} className="border bg-card rounded-md px-3 overflow-hidden shadow-sm">
               <AccordionTrigger className="hover:no-underline py-2.5">
                 <div className="flex items-center justify-between w-full pr-2 gap-2">
-                  <span className="font-medium text-left flex-1 truncate text-xs">
-                    <span className="text-muted-foreground font-mono mr-1">#{index + 1}</span>
-                    {path.steps.length > 0 ? path.steps[0].nodeLabel : "Vacío"}
-                  </span>
+                  <EditablePathName 
+                    path={path} 
+                    pathName={pathNames?.[path.id]} 
+                    onRename={onRenamePath} 
+                    index={index} 
+                  />
                   <div className="shrink-0 flex items-center gap-2">
                     <span className="text-[10px] text-muted-foreground">
                       {path.steps.length}p

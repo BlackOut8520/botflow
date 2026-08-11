@@ -59,20 +59,25 @@ export function extractFlowPaths(
 
     const newPath = [...currentPath, step]
 
+    const generateStableId = (steps: PathStep[]) => {
+      // Create a deterministic hash from the sequence of nodes and actions
+      return "path-" + steps.map(s => s.nodeId + (s.action ? `:${s.action}` : "")).join("|").replace(/[^a-zA-Z0-9-]/g, "")
+    }
+
     if (depth >= maxDepth) {
-      paths.push({ id: `path-${paths.length + 1}`, steps: newPath, status: "max_depth" })
+      paths.push({ id: generateStableId(newPath), steps: newPath, status: "max_depth" })
       return
     }
 
     if (visited.has(currentId)) {
-      paths.push({ id: `path-${paths.length + 1}`, steps: newPath, status: "loop" })
+      paths.push({ id: generateStableId(newPath), steps: newPath, status: "loop" })
       return
     }
 
     const outEdges = outgoingEdges.get(currentId) || []
 
     if (node.data?.kind === "end") {
-      paths.push({ id: `path-${paths.length + 1}`, steps: newPath, status: "end" })
+      paths.push({ id: generateStableId(newPath), steps: newPath, status: "end" })
       return
     }
 
@@ -84,9 +89,9 @@ export function extractFlowPaths(
         node.data.options.length > 0 &&
         node.data.options.every((o: any) => o.isBack)
       ) {
-        paths.push({ id: `path-${paths.length + 1}`, steps: newPath, status: "end" })
+        paths.push({ id: generateStableId(newPath), steps: newPath, status: "end" })
       } else {
-        paths.push({ id: `path-${paths.length + 1}`, steps: newPath, status: "dead_end" })
+        paths.push({ id: generateStableId(newPath), steps: newPath, status: "dead_end" })
       }
       return
     }

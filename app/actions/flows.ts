@@ -20,6 +20,7 @@ export interface FlowSummary {
 export interface FlowDetail extends FlowSummary {
   nodes: BotNode[]
   edges: BotEdge[]
+  pathNames: Record<string, string>
 }
 
 /** List all flows (most recently updated first). Seeds a starter flow if empty. */
@@ -35,7 +36,7 @@ export async function listFlows(): Promise<FlowSummary[]> {
     const id = "seed-ejemplo"
     await db
       .insert(flows)
-      .values({ id, name: "Flujo de ejemplo", nodes: initialNodes, edges: initialEdges })
+      .values({ id, name: "Flujo de ejemplo", nodes: initialNodes, edges: initialEdges, pathNames: {} })
       .onConflictDoNothing()
     return [{ id, name: "Flujo de ejemplo", updatedAt: new Date().toISOString() }]
   }
@@ -52,6 +53,7 @@ export async function getFlow(id: string): Promise<FlowDetail | null> {
     name: row.name,
     nodes: row.nodes,
     edges: row.edges,
+    pathNames: row.pathNames || {},
     updatedAt: row.updatedAt.toISOString(),
   }
 }
@@ -62,16 +64,16 @@ export async function createFlow(name = "Nuevo flujo"): Promise<FlowSummary> {
   const startNodes: BotNode[] = [
     { id: "start", type: "bot", position: { x: 0, y: 160 }, data: { kind: "start", label: "Inicio" } },
   ]
-  await db.insert(flows).values({ id, name, nodes: startNodes, edges: [] })
+  await db.insert(flows).values({ id, name, nodes: startNodes, edges: [], pathNames: {} })
   revalidatePath("/")
   return { id, name, updatedAt: new Date().toISOString() }
 }
 
 /** Persist the nodes/edges of a flow (used by autosave). */
-export async function saveFlow(id: string, nodes: BotNode[], edges: BotEdge[]): Promise<void> {
+export async function saveFlow(id: string, nodes: BotNode[], edges: BotEdge[], pathNames: Record<string, string> = {}): Promise<void> {
   await db
     .update(flows)
-    .set({ nodes, edges, updatedAt: new Date() })
+    .set({ nodes, edges, pathNames, updatedAt: new Date() })
     .where(eq(flows.id, id))
 }
 
