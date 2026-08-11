@@ -102,7 +102,7 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
         </div>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
+      <div className="flex-1 space-y-5 overflow-y-auto min-h-0 px-4 py-4">
         <div className="space-y-1.5">
           <Label htmlFor="node-label">Etiqueta del nodo</Label>
           <Input

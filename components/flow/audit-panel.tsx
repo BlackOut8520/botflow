@@ -90,7 +90,7 @@ export function AuditPanel({ report, onFocusNode }: AuditPanelProps) {
       </div>
 
       {/* Issues Scrollable Area */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+      <div className="flex-1 overflow-y-auto min-h-0 p-3 space-y-2.5">
         {filteredIssues.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center px-4">
             <CheckCircle2 className="size-10 text-emerald-500 mb-2" />

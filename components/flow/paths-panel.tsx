@@ -61,7 +61,7 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-3 pb-24">
           {/* @ts-ignore */}
           <Accordion type="single" collapsible={true as any} className="w-full space-y-2">
