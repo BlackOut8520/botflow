@@ -136,7 +136,7 @@ export function extractFlowPaths(
           if (opt) actionDesc = `Elegir: "${opt.label}"`
         } else if (node.data?.kind === "condition" && Array.isArray(node.data.branches)) {
           const branch = node.data.branches.find((b: any) => b.id === edge.sourceHandle)
-          if (branch) actionDesc = `Regla: ${branch.label || "De lo contrario (Else)"}`
+          if (branch) actionDesc = `Condicional: ${branch.label || "De lo contrario (Else)"}`
         } else if (node.data?.kind === "date_condition" && Array.isArray(node.data.dateBranches)) {
           const branch = node.data.dateBranches.find((b: any) => b.id === edge.sourceHandle)
           if (branch) actionDesc = `Fecha: ${branch.label}`
