@@ -573,16 +573,16 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
                     <TabsTrigger value="paths" className="flex-1 text-xs">Caminos</TabsTrigger>
                   </TabsList>
                 </div>
-                <TabsContent value="blocks" className="min-h-0 flex-1 overflow-y-auto p-3 m-0 data-active:flex">
+                <TabsContent value="blocks" className="min-h-0 flex-1 h-full w-full overflow-y-auto p-3 m-0 flex">
                   <NodePalette onAdd={addNode} />
                 </TabsContent>
-                <TabsContent value="props" className="min-h-0 flex-1 overflow-hidden p-0 m-0 data-active:flex flex-col">
+                <TabsContent value="props" className="min-h-0 flex-1 h-full w-full overflow-hidden p-0 m-0 flex flex-col">
                   <PropertiesPanel node={selectedNode} onChange={updateNodeData} onDelete={deleteNode} />
                 </TabsContent>
-                <TabsContent value="audit" className="min-h-0 flex-1 overflow-hidden p-0 m-0 data-active:flex flex-col">
+                <TabsContent value="audit" className="min-h-0 flex-1 h-full w-full overflow-hidden p-0 m-0 flex flex-col">
                   <AuditPanel report={auditReport} onFocusNode={handleFocusNode} />
                 </TabsContent>
-                <TabsContent value="paths" className="min-h-0 flex-1 overflow-hidden p-0 m-0 data-active:flex flex-col">
+                <TabsContent value="paths" className="min-h-0 flex-1 h-full w-full overflow-hidden p-0 m-0 flex flex-col">
                   <PathsPanel paths={simulatorReport.paths} hasMore={simulatorReport.hasMore} />
                 </TabsContent>
               </Tabs>
