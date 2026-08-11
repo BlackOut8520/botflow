@@ -556,7 +556,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
         <div className="flex min-h-0 flex-1">
           {/* left sidebar: blocks / properties / audit */}
           {leftOpen && (
-            <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-card">
+            <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-card min-h-0">
               <Tabs value={tab} onValueChange={(v) => setTab(v as "blocks" | "props" | "audit" | "paths")} className="flex min-h-0 flex-1 flex-col">
                 <div className="border-b border-border px-3 pt-3">
                   <TabsList className="w-full">
@@ -573,16 +573,16 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
                     <TabsTrigger value="paths" className="flex-1 text-xs">Caminos</TabsTrigger>
                   </TabsList>
                 </div>
-                <TabsContent value="blocks" className="min-h-0 flex-1 overflow-y-auto p-3 m-0 data-[state=active]:block">
+                <TabsContent value="blocks" className="min-h-0 flex-1 overflow-y-auto p-3 m-0 data-active:flex">
                   <NodePalette onAdd={addNode} />
                 </TabsContent>
-                <TabsContent value="props" className="min-h-0 flex-1 overflow-hidden p-0 m-0 data-[state=active]:flex flex-col">
+                <TabsContent value="props" className="min-h-0 flex-1 overflow-hidden p-0 m-0 data-active:flex flex-col">
                   <PropertiesPanel node={selectedNode} onChange={updateNodeData} onDelete={deleteNode} />
                 </TabsContent>
-                <TabsContent value="audit" className="min-h-0 flex-1 overflow-hidden p-0 m-0 data-[state=active]:flex flex-col">
+                <TabsContent value="audit" className="min-h-0 flex-1 overflow-hidden p-0 m-0 data-active:flex flex-col">
                   <AuditPanel report={auditReport} onFocusNode={handleFocusNode} />
                 </TabsContent>
-                <TabsContent value="paths" className="min-h-0 flex-1 overflow-hidden p-0 m-0 data-[state=active]:flex flex-col">
+                <TabsContent value="paths" className="min-h-0 flex-1 overflow-hidden p-0 m-0 data-active:flex flex-col">
                   <PathsPanel paths={simulatorReport.paths} hasMore={simulatorReport.hasMore} />
                 </TabsContent>
               </Tabs>
