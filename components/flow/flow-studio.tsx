@@ -187,7 +187,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
       setSaveStatus("saved")
     }, 800)
     return () => clearTimeout(t)
-  }, [nodes, edges, activeFlowId])
+  }, [nodes, edges, pathNames, activeFlowId])
 
   const markDirty = useCallback(() => {
     dirtyRef.current = true
@@ -200,7 +200,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
     await saveFlow(activeFlowId, nodes, edges, pathNames)
     dirtyRef.current = false
     setSaveStatus("saved")
-  }, [activeFlowId, nodes, edges])
+  }, [activeFlowId, nodes, edges, pathNames])
 
   // wrap change handlers so only genuine edits flag the flow as dirty
   const onNodesChange = useMutation(({ storage }, changes: NodeChange<BotNode>[]) => {
