@@ -122,7 +122,6 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
           </div>
         )}
         </div>
-      </div>
     </div>
   )
 }
