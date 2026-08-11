@@ -44,7 +44,7 @@ function EditablePathName({ path, pathName, onRename, index }: { path: FlowPath,
       ) : (
         <span 
           className="font-medium text-left truncate text-xs hover:bg-muted/60 px-1 py-0.5 -ml-1 rounded cursor-text transition-colors border border-transparent hover:border-border"
-          title="Clic para renombrar"
+          title={`${displayName}\n\n(Clic para renombrar)`}
           onClick={(e) => {
             e.stopPropagation()
             e.preventDefault()
