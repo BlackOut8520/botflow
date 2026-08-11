@@ -1,4 +1,3 @@
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Route, CheckCircle2, XCircle, RefreshCw, AlertTriangle, ArrowRight, Play } from "lucide-react"
@@ -61,9 +60,8 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
         </div>
       </div>
 
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="p-3 pb-24">
-          {/* @ts-ignore */}
+      <div className="flex-1 overflow-y-auto min-h-0 p-3 pb-24">
+        {/* @ts-ignore */}
           <Accordion type="single" collapsible={true as any} className="w-full space-y-2">
           {paths.filter(p => filter === "all" || (filter === "end" ? p.status === "end" : p.status !== "end")).map((path, index) => (
             <AccordionItem key={path.id} value={path.id} className="border bg-card rounded-md px-3 overflow-hidden shadow-sm">
@@ -124,7 +122,7 @@ export function PathsPanel({ paths, hasMore }: PathsPanelProps) {
           </div>
         )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }
