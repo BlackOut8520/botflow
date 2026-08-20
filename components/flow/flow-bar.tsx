@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import type { FlowSummary } from "@/app/actions/flows"
+import { MAX_FLOW_FILE_BYTES } from "@/lib/flow-io"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,7 +31,9 @@ interface FlowBarProps {
   onDelete: () => void
   onSave: () => void
   onExport: () => void
-  onImport: (name: string, nodes: any[], edges: any[]) => void
+  /** Receives the raw file text; parsing and validation happen on the server. */
+  onImport: (rawJson: string, fallbackName: string) => void
+  onImportError: (message: string) => void
 }
 
 export function FlowBar({
@@ -45,11 +48,13 @@ export function FlowBar({
   onSave,
   onExport,
   onImport,
+  onImportError,
 }: FlowBarProps) {
   const active = flows.find((f) => f.id === activeFlowId) ?? null
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const startEditing = () => {
     setDraft(active?.name ?? "")
@@ -63,23 +68,29 @@ export function FlowBar({
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const input = e.target
+    const file = input.files?.[0]
+    // Clear immediately so picking the same file twice in a row still fires onChange.
+    input.value = ""
     if (!file) return
+
+    if (file.size > MAX_FLOW_FILE_BYTES) {
+      onImportError(`El archivo es demasiado grande (máximo ${Math.floor(MAX_FLOW_FILE_BYTES / 1000)} KB).`)
+      return
+    }
+
     const reader = new FileReader()
+    reader.onerror = () => onImportError("No se pudo leer el archivo.")
     reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target?.result as string)
-        if (data.name && Array.isArray(data.nodes)) {
-          onImport(data.name, data.nodes, data.edges ?? [])
-        } else {
-          alert("El archivo no tiene el formato válido de Botflow.")
-        }
-      } catch (err) {
-        alert("Error al leer el archivo JSON.")
+      const text = event.target?.result
+      if (typeof text !== "string") {
+        onImportError("No se pudo leer el archivo.")
+        return
       }
+      // The server owns validation: it is the only side that can be trusted.
+      onImport(text, file.name.replace(/\.json$/i, "").replace(/_botflow$/i, "").replace(/_/g, " ").trim())
     }
     reader.readAsText(file)
-    e.target.value = ""
   }
 
   return (
@@ -107,7 +118,7 @@ export function FlowBar({
         </div>
       ) : (
         <>
-          <Select value={activeFlowId ?? undefined} onValueChange={onSelect}>
+          <Select value={activeFlowId ?? undefined} onValueChange={(value) => value && onSelect(value)}>
             <SelectTrigger className="h-9 w-56" aria-label="Seleccionar flujo">
               <SelectValue placeholder="Selecciona un flujo">{active?.name}</SelectValue>
             </SelectTrigger>
@@ -151,17 +162,17 @@ export function FlowBar({
 
           <div className="relative">
             <input
+              ref={fileInputRef}
               type="file"
-              accept=".json"
+              accept="application/json,.json"
               onChange={handleFileChange}
               className="hidden"
-              id="flow-import-input"
             />
             <Button
               size="icon"
               variant="ghost"
               className="size-9"
-              onClick={() => document.getElementById("flow-import-input")?.click()}
+              onClick={() => fileInputRef.current?.click()}
               title="Importar flujo (cargar JSON)"
               aria-label="Importar flujo"
             >
