@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { BotNode, BotEdge, ConditionBranch } from "./flow-types"
+import type { BotNode, BotEdge, ConditionBranch, ConditionRule } from "./flow-types"
 
 export interface ChatMessage {
   id: string
