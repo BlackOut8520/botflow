@@ -6,6 +6,7 @@ export const flows = pgTable("flows", {
   name: text("name").notNull().default("Flujo sin título"),
   nodes: jsonb("nodes").$type<BotNode[]>().notNull().default([]),
   edges: jsonb("edges").$type<BotEdge[]>().notNull().default([]),
+  pathNames: jsonb("path_names").$type<Record<string, string>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })

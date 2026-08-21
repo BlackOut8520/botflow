@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { BotNode, BotEdge, ConditionBranch, ConditionRule } from "./flow-types"
+import type { FlowPath } from "./flow-simulator"
 
 export interface ChatMessage {
   id: string
@@ -23,33 +24,129 @@ function interpolate(text: string, vars: Record<string, string>) {
   return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
 }
 
+function toArray<T>(val: any): T[] {
+  if (!val) return []
+  if (Array.isArray(val)) return val
+  if (typeof val.toImmutable === "function") return val.toImmutable()
+  if (typeof val.toArray === "function") return val.toArray()
+  if (typeof val.values === "function") return Array.from(val.values())
+  try {
+    return Array.from(val)
+  } catch {
+    return []
+  }
+}
+
 function evalRule(r: Pick<ConditionRule, "variable" | "operator" | "value">, vars: Record<string, string>) {
-  const v = (vars[r.variable] ?? "").toLowerCase()
-  const target = (r.value ?? "").toLowerCase()
+  if (!r.variable || !r.variable.trim()) return false
+  const v = (vars[r.variable.trim()] ?? "").trim().toLowerCase()
+  const target = (r.value ?? "").trim().toLowerCase()
   switch (r.operator) {
     case "equals":      return v === target
     case "not_equals":  return v !== target
     case "contains":    return v.includes(target)
-    case "empty":       return v.trim() === ""
-    case "not_empty":   return v.trim() !== ""
+    case "empty":       return v === ""
+    case "not_empty":   return v !== ""
     default:            return false
   }
 }
 
 function evalBranch(b: ConditionBranch, vars: Record<string, string>): boolean {
-  // Rama por defecto: sin variable ni reglas → siempre pasa
-  if ((!b.rules || b.rules.length === 0) && !b.variable) return true
+  const rules = toArray<ConditionRule>(b.rules)
 
   // Nuevo formato: múltiples reglas con lógica AND / OR
-  if (b.rules && b.rules.length > 0) {
+  if (rules.length > 0) {
     const logic = b.logic ?? "and"
     return logic === "and"
-      ? b.rules.every((r) => evalRule(r, vars))
-      : b.rules.some((r) => evalRule(r, vars))
+      ? rules.every((r) => evalRule(r, vars))
+      : rules.some((r) => evalRule(r, vars))
   }
 
   // Formato heredado: una sola variable (compatibilidad hacia atrás)
-  return evalRule({ variable: b.variable ?? "", operator: b.operator ?? "equals", value: b.value ?? "" }, vars)
+  if (b.variable) {
+    return evalRule({ variable: b.variable, operator: b.operator ?? "equals", value: b.value ?? "" }, vars)
+  }
+
+  return false
+}
+
+export interface DateRangeQuery {
+  startDay?: number
+  startMonth?: number
+  startYear?: number
+  endDay?: number
+  endMonth?: number
+  endYear?: number
+}
+
+export function evalDateRange(
+  range: DateRangeQuery,
+  simDay: number,
+  simMonth: number,
+  simYear: number,
+): boolean {
+  if (!range.startMonth || !range.endMonth) return true
+
+  const startDay = range.startDay ?? 1
+  const startMonth = range.startMonth
+  const endDay = range.endDay ?? 31
+  const endMonth = range.endMonth
+
+  const hasStartYear = range.startYear != null && range.startYear > 0
+  const hasEndYear = range.endYear != null && range.endYear > 0
+
+  if (hasStartYear || hasEndYear) {
+    const sYear = hasStartYear ? range.startYear! : (hasEndYear ? range.endYear! : simYear)
+    let eYear = hasEndYear ? range.endYear! : sYear
+
+    if (hasStartYear && !hasEndYear && startMonth > endMonth) {
+      eYear = sYear + 1
+    }
+
+    const startVal = sYear * 10000 + startMonth * 100 + startDay
+    const endVal = eYear * 10000 + endMonth * 100 + endDay
+    const curVal = simYear * 10000 + simMonth * 100 + simDay
+
+    return curVal >= startVal && curVal <= endVal
+  }
+
+  const startVal = startMonth * 100 + startDay
+  const endVal = endMonth * 100 + endDay
+  const curVal = simMonth * 100 + simDay
+
+  if (startVal <= endVal) {
+    return curVal >= startVal && curVal <= endVal
+  } else {
+    return curVal >= startVal || curVal <= endVal
+  }
+}
+
+function findMatchingKeywordNode(text: string, nodes: BotNode[]): { node: BotNode; matchedKeyword: string } | null {
+  const normalizedText = text.toLowerCase().trim()
+  if (!normalizedText) return null
+
+  const textWords = normalizedText.split(/[\s,.;!?¡¿"']+/).filter(Boolean)
+
+  for (const node of nodes) {
+    if (node.data.kind === "start") continue
+    const keywords = node.data.keywords
+    if (!keywords || !Array.isArray(keywords)) continue
+
+    for (const kw of keywords) {
+      const normalizedKw = kw.toLowerCase().trim()
+      if (!normalizedKw) continue
+
+      if (
+        normalizedText === normalizedKw ||
+        textWords.includes(normalizedKw) ||
+        normalizedText.includes(normalizedKw)
+      ) {
+        return { node, matchedKeyword: kw }
+      }
+    }
+  }
+
+  return null
 }
 
 interface UseSimulatorArgs {
@@ -68,11 +165,13 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
   const now = new Date()
   const [simulatedDay, setSimulatedDay] = useState<number>(now.getDate())
   const [simulatedMonth, setSimulatedMonth] = useState<number>(now.getMonth() + 1)
+  const [simulatedYear, setSimulatedYear] = useState<number>(now.getFullYear())
 
-  // keep latest graph + vars in refs so scheduled callbacks stay fresh
+  // keep latest graph + vars + menu history in refs so scheduled callbacks stay fresh
   const nodesRef = useRef(nodes)
   const edgesRef = useRef(edges)
   const varsRef = useRef<Record<string, string>>({})
+  const menuHistoryRef = useRef<string[]>([])
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
@@ -138,19 +237,17 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         break
       }
       case "question": {
+        const history = menuHistoryRef.current
+        if (history[history.length - 1] !== nodeId) {
+          history.push(nodeId)
+        }
         setIsTyping(true)
         schedule(() => {
           setIsTyping(false)
           if (data.text) pushMessage("bot", interpolate(data.text, varsRef.current))
-          const cd = simulatedDay, cm = simulatedMonth
-          const cur = cm * 100 + cd
-          const visibleOptions = (data.options ?? []).filter((o) => {
-            if (!o.startMonth || !o.endMonth) return true
-            const s = o.startMonth * 100 + (o.startDay ?? 1)
-            const e = o.endMonth * 100 + (o.endDay ?? 31)
-            if (s <= e) return cur >= s && cur <= e
-            return cur >= s || cur <= e
-          })
+          const visibleOptions = (data.options ?? []).filter((o) =>
+            evalDateRange(o, simulatedDay, simulatedMonth, simulatedYear)
+          )
           if (visibleOptions.length === 0) {
             pushMessage("system", "Ninguna opción disponible para este periodo. Fin del recorrido.")
             setIsRunning(false)
@@ -174,7 +271,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         pushMessage("system", `Evaluando condición «${data.label}»`)
         schedule(() => {
           const branches = data.branches ?? []
-          const match = branches.find((b) => !b.variable || evalBranch(b, varsRef.current))
+          const match = branches.find((b) => evalBranch(b, varsRef.current))
           if (match) {
             pushMessage("system", `Rama seleccionada: ${match.label}`)
             advance(getTarget(nodeId, match.id))
@@ -188,17 +285,11 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
       }
       case "date_condition": {
         const MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
-        const cd = simulatedDay, cm = simulatedMonth
-        const cur = cm * 100 + cd
-        pushMessage("system", `Verificando fecha: ${cd} de ${MONTH_NAMES[cm - 1]}`)
+        const cd = simulatedDay, cm = simulatedMonth, cy = simulatedYear
+        pushMessage("system", `Verificando fecha: ${cd} de ${MONTH_NAMES[cm - 1]} de ${cy}`)
         schedule(() => {
           const dateBranches = data.dateBranches ?? []
-          const match = dateBranches.find((b) => {
-            const s = b.startMonth * 100 + (b.startDay ?? 1)
-            const e = b.endMonth * 100 + (b.endDay ?? 31)
-            if (s <= e) return cur >= s && cur <= e
-            return cur >= s || cur <= e
-          })
+          const match = dateBranches.find((b) => evalDateRange(b, cd, cm, cy))
           if (match) {
             pushMessage("system", `Periodo activo: ${match.label}`)
             advance(getTarget(nodeId, match.id))
@@ -225,12 +316,13 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
         break
       }
     }
-  }, [])
+  }, [simulatedDay, simulatedMonth, simulatedYear])
 
   const start = useCallback(() => {
     clearTimers()
     counter = 0
     varsRef.current = {}
+    menuHistoryRef.current = []
     setVariables({})
     setMessages([])
     setVisitedNodeIds(new Set())
@@ -253,6 +345,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     setAwaiting(null)
     setVariables({})
     varsRef.current = {}
+    menuHistoryRef.current = []
     setIsTyping(false)
   }, [])
 
@@ -260,6 +353,7 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     clearTimers()
     counter = 0
     varsRef.current = {}
+    menuHistoryRef.current = []
     setVariables({})
     setMessages([])
     setVisitedNodeIds(new Set())
@@ -274,6 +368,67 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     }, 100)
   }, [advance])
 
+  const playPath = useCallback((path: FlowPath) => {
+    clearTimers()
+    counter = 0
+    varsRef.current = {}
+    menuHistoryRef.current = []
+    setVariables({})
+    setMessages([])
+    setVisitedNodeIds(new Set())
+    setAwaiting(null)
+    setActiveNodeId(null)
+    setIsTyping(false)
+    setIsRunning(true)
+
+    pushMessage("system", `Reproduciendo camino con ${path.steps.length} pasos...`)
+
+    let delay = 300
+    path.steps.forEach((step, index) => {
+      schedule(() => {
+        visit(step.nodeId)
+        const node = getNode(step.nodeId)
+        if (node) {
+          if (step.action) {
+            pushMessage("user", step.action)
+          }
+          if (node.data.kind === "message" || node.data.kind === "question") {
+            pushMessage("bot", interpolate(node.data.text ?? "", varsRef.current))
+          }
+        }
+
+        if (index === path.steps.length - 1) {
+          schedule(() => {
+            setIsRunning(false)
+            setActiveNodeId(null)
+            pushMessage("system", "Reproducción finalizada.")
+          }, 800)
+        }
+      }, delay)
+      delay += 800
+    })
+  }, [])
+
+
+  const checkKeywordJump = useCallback(
+    (text: string): boolean => {
+      const match = findMatchingKeywordNode(text, nodesRef.current)
+      if (match) {
+        clearTimers()
+        setAwaiting(null)
+        setIsTyping(false)
+        pushMessage(
+          "system",
+          `⚡ Palabra clave detectada («${match.matchedKeyword}»): Saltando a «${match.node.data.label}»`,
+        )
+        schedule(() => advance(match.node.id), 400)
+        return true
+      }
+      return false
+    },
+    [advance],
+  )
+
   const chooseOption = useCallback(
     (optionId: string, label: string) => {
       if (!awaiting || awaiting.type !== "options") return
@@ -281,33 +436,110 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
       const node = getNode(nodeId)
       const varName = node?.data.variable
       pushMessage("user", label)
+
+      const opt = node?.data.options?.find((o) => o.id === optionId)
+      const targetNodeId = getTarget(nodeId, optionId)
+      const isDynamicBack =
+        opt?.isBack || (label.toLowerCase().trim() === "regresar" && !targetNodeId)
+
+      // Only evaluate keyword jump if the option has no graph edge and is not a back action
+      if (!targetNodeId && !isDynamicBack) {
+        if (checkKeywordJump(label)) {
+          return
+        }
+      }
+
       if (varName) {
         const nextVars = { ...varsRef.current, [varName]: label }
         varsRef.current = nextVars
         setVariables(nextVars)
       }
+
+      if (isDynamicBack) {
+        setAwaiting(null)
+        const history = menuHistoryRef.current
+        if (history.length > 0 && history[history.length - 1] === nodeId) {
+          history.pop()
+        }
+        const previousNodeId = history.pop()
+        
+        if (previousNodeId) {
+          // 1º Prioridad: Pila de Historial en runtime
+          pushMessage("system", "↩ Regresando al menú anterior...")
+          schedule(() => advance(previousNodeId), 400)
+        } else {
+          // 2º Prioridad: Fallback por Inspección de Aristas Entrantes del Grafo
+          const incomingEdge = edgesRef.current.find((e) => e.target === nodeId && e.source !== nodeId)
+          if (incomingEdge?.source) {
+            pushMessage("system", "↩ Regresando al nodo previo del diagrama...")
+            schedule(() => advance(incomingEdge.source), 400)
+          } else {
+            pushMessage("system", "No hay un menú anterior en el historial ni en el diagrama. Fin del recorrido.")
+            setIsRunning(false)
+            setActiveNodeId(null)
+          }
+        }
+        return
+      }
+
       setAwaiting(null)
-      schedule(() => advance(getTarget(nodeId, optionId)), 400)
+      schedule(() => advance(targetNodeId), 400)
     },
-    [awaiting, advance],
+    [awaiting, advance, checkKeywordJump],
   )
 
   const submitInput = useCallback(
     (value: string) => {
-      if (!awaiting || awaiting.type !== "input") return
-      const nodeId = awaiting.nodeId
-      const node = getNode(nodeId)
-      const varName = node?.data.variable
-      pushMessage("user", value)
-      if (varName) {
-        const nextVars = { ...varsRef.current, [varName]: value }
-        varsRef.current = nextVars
-        setVariables(nextVars)
+      const trimmed = value.trim()
+      if (!trimmed) return
+
+      pushMessage("user", trimmed)
+
+      // 1. Check for global keyword jump
+      if (checkKeywordJump(trimmed)) {
+        return
       }
-      setAwaiting(null)
-      schedule(() => advance(getTarget(nodeId)), 400)
+
+      // 2. Normal flow progression when no keyword matched
+      if (awaiting?.type === "input") {
+        const nodeId = awaiting.nodeId
+        const node = getNode(nodeId)
+        const varName = node?.data.variable
+        if (varName) {
+          const nextVars = { ...varsRef.current, [varName]: trimmed }
+          varsRef.current = nextVars
+          setVariables(nextVars)
+        }
+        setAwaiting(null)
+        schedule(() => advance(getTarget(nodeId)), 400)
+      } else if (awaiting?.type === "options") {
+        const nodeId = awaiting.nodeId
+        const lowerTrimmed = trimmed.toLowerCase()
+        const matchedOption = awaiting.options?.find(
+          (o) => o.label.toLowerCase() === lowerTrimmed || o.id.toLowerCase() === lowerTrimmed,
+        )
+
+        if (matchedOption) {
+          const node = getNode(nodeId)
+          const varName = node?.data.variable
+          if (varName) {
+            const nextVars = { ...varsRef.current, [varName]: matchedOption.label }
+            varsRef.current = nextVars
+            setVariables(nextVars)
+          }
+          setAwaiting(null)
+          schedule(() => advance(getTarget(nodeId, matchedOption.id)), 400)
+        } else {
+          pushMessage(
+            "system",
+            "Opción no reconocida. Selecciona una opción en pantalla o ingresa una palabra clave válida.",
+          )
+        }
+      } else {
+        pushMessage("system", "Ninguna palabra clave coincidente detectada.")
+      }
     },
-    [awaiting, advance],
+    [awaiting, advance, checkKeywordJump],
   )
 
   useEffect(() => () => clearTimers(), [])
@@ -322,12 +554,17 @@ export function useSimulator({ nodes, edges }: UseSimulatorArgs) {
     isTyping,
     simulatedDay,
     simulatedMonth,
+    simulatedYear,
     setSimulatedDay,
     setSimulatedMonth,
+    setSimulatedYear,
     start,
     reset,
     startFrom,
+    playPath,
+    checkKeywordJump,
     chooseOption,
     submitInput,
   }
 }
+

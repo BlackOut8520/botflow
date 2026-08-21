@@ -1,6 +1,7 @@
 "use client"
 
-import { Trash2, Plus, X, MousePointerClick } from "lucide-react"
+import { useState } from "react"
+import { Trash2, Plus, X, MousePointerClick, Tag } from "lucide-react"
 import type { BotNode, BotNodeData, ConditionBranch, ConditionRule, DateBranch, QuestionOption } from "@/lib/flow-types"
 import { NODE_KINDS } from "@/lib/flow-types"
 import { NODE_VISUALS } from "@/lib/node-visuals"
@@ -52,8 +53,8 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
 
   // question options
   const options = node.data.options ?? []
-  const updateOption = (id: string, label: string, startDay?: number, startMonth?: number, endDay?: number, endMonth?: number) =>
-    set({ options: options.map((o) => (o.id === id ? { ...o, label, startDay, startMonth, endDay, endMonth } : o)) })
+  const updateOption = (id: string, patch: Partial<QuestionOption>) =>
+    set({ options: options.map((o) => (o.id === id ? { ...o, ...patch } : o)) })
   const addOption = () =>
     set({ options: [...options, { id: uid("opt"), label: `Opción ${options.length + 1}` }] as QuestionOption[] })
   const removeOption = (id: string) => set({ options: options.filter((o) => o.id !== id) })
@@ -101,7 +102,7 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
         </div>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
+      <div className="flex-1 space-y-5 overflow-y-auto min-h-0 px-4 py-4">
         <div className="space-y-1.5">
           <Label htmlFor="node-label">Etiqueta del nodo</Label>
           <Input
@@ -190,7 +191,7 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                       <div className="flex items-center gap-2">
                         <Input
                           value={o.label}
-                          onChange={(e) => updateOption(o.id, e.target.value)}
+                          onChange={(e) => updateOption(o.id, { label: e.target.value })}
                           className="h-8"
                           placeholder="Texto de la opción"
                         />
@@ -203,20 +204,35 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                           <X className="size-4" />
                         </Button>
                       </div>
-                      {/* Rango de fechas opcional */}
-                      <div className="space-y-1">
+                      {/* Opciones especiales: Acción dinámica Regresar & Rango de fechas */}
+                      <div className="space-y-1.5 pt-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            id={`opt-back-${o.id}`}
+                            checked={!!o.isBack}
+                            onChange={(e) => updateOption(o.id, { isBack: e.target.checked })}
+                            className="size-3.5 accent-primary"
+                          />
+                          <label htmlFor={`opt-back-${o.id}`} className="text-[11px] font-medium text-foreground cursor-pointer select-none">
+                            ↩ Acción dinámica: Volver al menú anterior
+                          </label>
+                        </div>
                         <div className="flex items-center gap-1.5">
                           <input
                             type="checkbox"
                             id={`opt-date-${o.id}`}
                             checked={!!o.startMonth}
-                            onChange={(e) => updateOption(o.id, o.label,
-                              e.target.checked ? 1 : undefined, e.target.checked ? 1 : undefined,
-                              e.target.checked ? 31 : undefined, e.target.checked ? 12 : undefined)}
+                            onChange={(e) => updateOption(o.id, {
+                              startDay: e.target.checked ? 1 : undefined,
+                              startMonth: e.target.checked ? 1 : undefined,
+                              endDay: e.target.checked ? 31 : undefined,
+                              endMonth: e.target.checked ? 12 : undefined,
+                            })}
                             className="size-3.5 accent-primary"
                           />
                           <label htmlFor={`opt-date-${o.id}`} className="text-[11px] text-muted-foreground cursor-pointer select-none">
-                            Restringir por periodo
+                            Restringir por periodo de fecha
                           </label>
                         </div>
                         {o.startMonth && (
@@ -224,24 +240,34 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                             <div className="flex items-center gap-1.5">
                               <Label className="text-[10px] w-10 shrink-0">Desde</Label>
                               <input type="number" min={1} max={31} value={o.startDay ?? 1}
-                                onChange={(e) => updateOption(o.id, o.label, Number(e.target.value), o.startMonth, o.endDay, o.endMonth)}
+                                onChange={(e) => updateOption(o.id, { startDay: Number(e.target.value) })}
                                 className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                               />
-                              <Select value={String(o.startMonth)} onValueChange={(v) => updateOption(o.id, o.label, o.startDay, Number(v), o.endDay, o.endMonth)}>
+                              <Select value={String(o.startMonth)} onValueChange={(v) => updateOption(o.id, { startMonth: Number(v) })}>
                                 <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                                 <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                               </Select>
+                              <input type="number" placeholder="Año" value={o.startYear ?? ""}
+                                onChange={(e) => updateOption(o.id, { startYear: e.target.value ? Number(e.target.value) : undefined })}
+                                className="h-7 w-16 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                                title="Año de inicio opcional"
+                              />
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Label className="text-[10px] w-10 shrink-0">Hasta</Label>
                               <input type="number" min={1} max={31} value={o.endDay ?? 31}
-                                onChange={(e) => updateOption(o.id, o.label, o.startDay, o.startMonth, Number(e.target.value), o.endMonth)}
+                                onChange={(e) => updateOption(o.id, { endDay: Number(e.target.value) })}
                                 className="h-7 w-12 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                               />
-                              <Select value={String(o.endMonth ?? 12)} onValueChange={(v) => updateOption(o.id, o.label, o.startDay, o.startMonth, o.endDay, Number(v))}>
+                              <Select value={String(o.endMonth ?? 12)} onValueChange={(v) => updateOption(o.id, { endMonth: Number(v) })}>
                                 <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                                 <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                               </Select>
+                              <input type="number" placeholder="Año" value={o.endYear ?? ""}
+                                onChange={(e) => updateOption(o.id, { endYear: e.target.value ? Number(e.target.value) : undefined })}
+                                className="h-7 w-16 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                                title="Año de fin opcional"
+                              />
                             </div>
                           </div>
                         )}
@@ -404,7 +430,7 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                El bot revisará el mes actual y tomará el camino del primer periodo que coincida.
+                El bot revisará la fecha actual y tomará el camino del primer periodo coincidente. Puedes especificar el año si el periodo abarca años específicos (ej. Nov 2026 – Abr 2027).
               </p>
               {dateBranches.map((b) => (
                 <div key={b.id} className="space-y-2 rounded-lg border border-border bg-muted/30 p-2.5">
@@ -434,6 +460,11 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                         <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                         <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                       </Select>
+                      <input type="number" placeholder="Año" value={b.startYear ?? ""}
+                        onChange={(e) => updateDB(b.id, { startYear: e.target.value ? Number(e.target.value) : undefined })}
+                        className="h-7 w-16 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                        title="Año de inicio opcional"
+                      />
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Label className="text-[10px] w-10 shrink-0">Hasta</Label>
@@ -445,6 +476,11 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
                         <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                         <SelectContent>{MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
                       </Select>
+                      <input type="number" placeholder="Año" value={b.endYear ?? ""}
+                        onChange={(e) => updateDB(b.id, { endYear: e.target.value ? Number(e.target.value) : undefined })}
+                        className="h-7 w-16 rounded-md border border-border bg-background px-2 text-center text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                        title="Año de fin opcional"
+                      />
                     </div>
                   </div>
                 </div>
@@ -488,6 +524,16 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
             Nodo terminal. Cuando la simulación llega aquí, la conversación finaliza.
           </p>
         )}
+
+        {kind !== "start" && (
+          <>
+            <Separator className="my-2" />
+            <KeywordsSection
+              keywords={node.data.keywords}
+              onChange={(keywords) => set({ keywords })}
+            />
+          </>
+        )}
       </div>
 
       {kind !== "start" && (
@@ -504,6 +550,79 @@ export function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelPro
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function KeywordsSection({
+  keywords = [],
+  onChange,
+}: {
+  keywords?: string[]
+  onChange: (kw: string[]) => void
+}) {
+  const [inputVal, setInputVal] = useState("")
+
+  const handleAdd = () => {
+    const trimmed = inputVal.trim().toLowerCase()
+    if (!trimmed) return
+    const existing = keywords.map((k) => k.toLowerCase())
+    if (!existing.includes(trimmed)) {
+      onChange([...keywords, trimmed])
+    }
+    setInputVal("")
+  }
+
+  const handleRemove = (indexToRemove: number) => {
+    onChange(keywords.filter((_, i) => i !== indexToRemove))
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+        <Tag className="size-3.5 text-primary" />
+        <span>Palabras clave (Disparadores)</span>
+      </div>
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        Si el usuario escribe alguna de estas palabras en el chat, el flujo saltará automáticamente a este bloque.
+      </p>
+      {keywords.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 py-1">
+          {keywords.map((kw, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary border border-primary/20"
+            >
+              {kw}
+              <button
+                type="button"
+                onClick={() => handleRemove(i)}
+                className="text-primary/70 hover:text-primary"
+                title="Eliminar palabra clave"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-1.5">
+        <Input
+          value={inputVal}
+          onChange={(e) => setInputVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault()
+              handleAdd()
+            }
+          }}
+          placeholder="Ej: precios, ayuda, horario..."
+          className="h-8 text-xs"
+        />
+        <Button size="sm" type="button" variant="secondary" onClick={handleAdd} className="h-8 text-xs shrink-0">
+          <Plus className="size-3.5" /> Añadir
+        </Button>
+      </div>
     </div>
   )
 }

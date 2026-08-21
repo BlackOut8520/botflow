@@ -13,6 +13,10 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
+    "@liveblocks/client": "^3.23.0",
+    "@liveblocks/node": "^3.23.0",
+    "@liveblocks/react": "^3.23.0",
+    "@liveblocks/react-ui": "^3.23.0",
     "@radix-ui/react-alert-dialog": "^1.1.19",
     "@vercel/analytics": "1.6.1",
     "@xyflow/react": "^12.11.2",
@@ -38,6 +42,9 @@
     "postcss": "^8.5",
     "tailwindcss": "^4.3.3",
     "typescript": "5.7.3"
+  },
+  "overrides": {
+    "hono": "4.12.25"
   },
   "pnpm": {
     "overrides": {

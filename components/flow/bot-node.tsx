@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { Play, Copy } from "lucide-react"
+import { Play, Copy, Tag } from "lucide-react"
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import type { BotNode as BotNodeType } from "@/lib/flow-types"
 import { NODE_KINDS } from "@/lib/flow-types"
@@ -32,7 +32,7 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
   const isMulti = data.kind === "question" || data.kind === "condition" || data.kind === "date_condition"
   const branches = isMulti
     ? data.kind === "question"
-      ? (data.options ?? []).map((o) => ({ id: o.id, label: o.label }))
+      ? (data.options ?? []).map((o) => ({ id: o.id, label: o.label, isBack: o.isBack }))
       : data.kind === "date_condition"
       ? (data.dateBranches ?? []).map((b) => ({ id: b.id, label: b.label }))
       : (data.branches ?? []).map((b) => ({ id: b.id, label: b.label }))
@@ -44,7 +44,7 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
     <div
       className={cn(
         "group relative min-w-52 max-w-64 rounded-xl border bg-card shadow-sm transition-all",
-        selected ? "border-primary ring-2 ring-primary/40" : "border-border",
+        selected ? "border-primary ring-4 ring-primary/50 shadow-lg scale-[1.02]" : "border-border",
         isActive && "ring-2 ring-primary shadow-lg scale-[1.03]",
         isPathEnd && "opacity-100",
         isVisited && isRunning && "opacity-80",
@@ -58,20 +58,34 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
       }
     >
       {/* action buttons on hover */}
-      <div className="absolute -right-2.5 -top-2.5 z-20 hidden items-center gap-1.5 group-hover:flex">
+      <div className="absolute -right-2.5 -top-2.5 z-20 hidden items-center gap-1.5 group-hover:flex nodrag nopan">
         {duplicateNode && (
           <button
-            onClick={(e) => { e.stopPropagation(); duplicateNode(id) }}
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              duplicateNode(id)
+            }}
             title="Duplicar nodo"
-            className="flex size-6 items-center justify-center rounded-full border-2 border-background shadow-md bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-colors"
+            className="flex size-6 items-center justify-center rounded-full border-2 border-background shadow-md bg-muted text-muted-foreground hover:bg-foreground hover:text-background transition-colors cursor-pointer"
           >
             <Copy className="size-3" />
           </button>
         )}
         <button
-          onClick={(e) => { e.stopPropagation(); startFrom(id) }}
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            startFrom(id)
+          }}
           title="Simular desde aquí"
-          className="flex size-6 items-center justify-center rounded-full border-2 border-background shadow-md"
+          className="flex size-6 items-center justify-center rounded-full border-2 border-background shadow-md cursor-pointer"
           style={{ background: color }}
         >
           <Play className="size-3 fill-white text-white" />
@@ -103,6 +117,19 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
         {data.kind === "action" && data.actionName && (
           <p className="mt-1.5 font-mono text-[11px] text-node-action">{data.actionName}</p>
         )}
+        {data.keywords && data.keywords.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {data.keywords.map((kw, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary border border-primary/20"
+              >
+                <Tag className="size-2.5" />
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* single outgoing handle (centered on the right) */}
@@ -112,8 +139,13 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
       {branches.length > 0 && (
         <div className="flex flex-col gap-1.5 border-t border-border/60 px-3 py-2">
           {branches.map((b) => (
-            <div key={b.id} className="relative flex items-center justify-end rounded-md bg-muted/60 px-2 py-1">
-              <span className="truncate text-[11px] font-medium text-foreground">{b.label || "—"}</span>
+            <div key={b.id} className="relative flex items-center justify-between rounded-md bg-muted/60 px-2 py-1 gap-2">
+              {b.isBack && (
+                <span className="inline-flex items-center text-[9px] font-semibold text-primary bg-primary/10 rounded px-1.5 py-0.5 border border-primary/20">
+                  ↩ Volver
+                </span>
+              )}
+              <span className="truncate text-[11px] font-medium text-foreground ml-auto">{b.label || "—"}</span>
               <Handle
                 id={b.id}
                 type="source"
