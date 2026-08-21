@@ -47,6 +47,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Workflow, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react"
 import { useUpdateMyPresence, useStorage, useMutation } from "@liveblocks/react/suspense"
 import { LiveObject } from "@liveblocks/client"
+import { toStoredEdge, toStoredNode, toStoredNodeData } from "@/liveblocks.config"
 import { Cursors } from "./cursors"
 import { runFlowAudit } from "@/lib/flow-audit"
 import { AuditDialog } from "./audit-dialog"
@@ -268,7 +269,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
       ...connection,
       id: `e-${connection.source}-${connection.sourceHandle}-${connection.target}-${connection.targetHandle}`,
     } as BotEdge
-    storage.get("edges").set(newEdge.id, new LiveObject(newEdge))
+    storage.get("edges").set(newEdge.id, new LiveObject(toStoredEdge(newEdge)))
   }, [markDirty])
 
   const updateNodeData = useMutation(({ storage }, id: string, patch: Partial<BotNodeData>) => {
@@ -276,7 +277,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
     const node = storage.get("nodes").get(id)
     if (node) {
       const currentData = node.get("data")
-      node.update({ data: { ...currentData, ...patch } })
+      node.update({ data: toStoredNodeData({ ...currentData, ...patch }) })
     }
   }, [markDirty])
 
@@ -307,7 +308,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
       }
     })()
     const node: BotNode = { id, type: "bot", position: pos, data: defaultData(kind) }
-    storage.get("nodes").set(id, new LiveObject(node))
+    storage.get("nodes").set(id, new LiveObject(toStoredNode(node)))
     setSelectedId(id)
     setTab("props")
   }, [markDirty, screenToFlowPosition])
@@ -370,7 +371,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
 
       const nodesMap = storage.get("nodes")
       if (nodesMap) {
-        nodesMap.set(newId, new LiveObject(newNode))
+        nodesMap.set(newId, new LiveObject(toStoredNode(newNode)))
       }
       setSelectedId(newId)
       setTab("props")
@@ -735,7 +736,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
                 const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
                 updateMyPresence({ cursor: position })
               }}
-              onPointerLeaveCapture={() => updateMyPresence({ cursor: null })}
+              onPointerLeave={() => updateMyPresence({ cursor: null })}
             >
               <ReactFlow
                 nodes={flowNodes}

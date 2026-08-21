@@ -30,7 +30,7 @@ function BotNodeComponent({ id, data, selected }: NodeProps<BotNodeType>) {
 
   // determine outgoing handles
   const isMulti = data.kind === "question" || data.kind === "condition" || data.kind === "date_condition"
-  const branches = isMulti
+  const branches: { id: string; label: string; isBack?: boolean }[] = isMulti
     ? data.kind === "question"
       ? (data.options ?? []).map((o) => ({ id: o.id, label: o.label, isBack: o.isBack }))
       : data.kind === "date_condition"

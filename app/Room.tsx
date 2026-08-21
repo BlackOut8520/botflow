@@ -7,6 +7,7 @@ import {
   ClientSideSuspense,
 } from "@liveblocks/react/suspense";
 import { LiveMap, LiveObject } from "@liveblocks/client";
+import { toStoredEdge, toStoredNode } from "@/liveblocks.config";
 import type { BotNode } from "@/lib/flow-types";
 import type { Edge } from "@xyflow/react";
 
@@ -38,7 +39,7 @@ function NamePrompt({ onNameSet }: { onNameSet: () => void }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-md" hideCloseButton>
+      <DialogContent className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Bienvenido a Botflow</DialogTitle>
           <DialogDescription>
@@ -91,8 +92,8 @@ export function Room({
       <RoomProvider 
         id={`${roomId}-v2`}
         initialStorage={{
-          nodes: new LiveMap(initialNodes.map(n => [n.id, new LiveObject(n)])),
-          edges: new LiveMap(initialEdges.map(e => [e.id, new LiveObject(e)])),
+          nodes: new LiveMap(initialNodes.map(n => [n.id, new LiveObject(toStoredNode(n))])),
+          edges: new LiveMap(initialEdges.map(e => [e.id, new LiveObject(toStoredEdge(e))])),
         }}
       >
         <ClientSideSuspense fallback={

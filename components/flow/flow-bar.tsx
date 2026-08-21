@@ -183,7 +183,7 @@ export function FlowBar({
         </div>
       ) : (
         <>
-          <Select value={activeFlowId ?? undefined} onValueChange={onSelect}>
+          <Select value={activeFlowId ?? undefined} onValueChange={(value) => { if (value !== null) onSelect(value) }}>
             <SelectTrigger className="h-9 w-56" aria-label="Seleccionar flujo">
               <SelectValue placeholder="Selecciona un flujo">{active?.name}</SelectValue>
             </SelectTrigger>
