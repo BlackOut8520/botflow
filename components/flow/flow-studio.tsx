@@ -122,9 +122,29 @@ interface StudioInnerProps {
   initialFlows: FlowSummary[]
   initialFlow: FlowDetail | null
   onFlowChange: (flow: FlowDetail) => void
+  /**
+   * Notice state and the unsaved-changes flag are owned by `FlowStudio`, above the
+   * Liveblocks `<Room>`. Switching or importing a flow changes the room id, which
+   * remounts this component — anything held here would be wiped before it could be
+   * read, which is exactly what happened to the import warnings.
+   */
+  sync: SyncState | null
+  onSyncChange: (next: SyncState | null) => void
+  newAppVersion: boolean
+  reloadIn: number | null
+  dirtyRef: React.MutableRefObject<boolean>
 }
 
-function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerProps) {
+function StudioInner({
+  initialFlows,
+  initialFlow,
+  onFlowChange,
+  sync,
+  onSyncChange,
+  newAppVersion,
+  reloadIn,
+  dirtyRef,
+}: StudioInnerProps) {
   const liveNodes = useStorage((root) => root.nodes)
   const liveEdges = useStorage((root) => root.edges)
 
@@ -158,13 +178,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
   const activeFlowId = initialFlow?.id ?? null
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
   const [switching, setSwitching] = useState(false)
-  const dirtyRef = useRef(false)
   const [pathNames, setPathNames] = useState<Record<string, string>>(initialFlow?.pathNames ?? {})
-
-  // ---- notices: failed saves, repaired imports, stale deploy ----
-  const [sync, setSync] = useState<SyncState | null>(null)
-  const [reloadIn, setReloadIn] = useState<number | null>(null)
-  const newAppVersion = useAppVersion(APP_VERSION_INTERVAL_MS)
 
   const wrapperRef = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition, setCenter } = useReactFlow()
@@ -204,17 +218,18 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
       if (result.ok) {
         dirtyRef.current = false
         setSaveStatus("saved")
-        // A save that went through invalidates a previous failure notice.
-        setSync((current) => (current?.kind === "error" ? null : current))
+        // A save that went through invalidates a previous failure notice, but must not
+        // clear the warnings from a repaired import: those are still worth reading.
+        if (sync?.kind === "error") onSyncChange(null)
         return
       }
       setSaveStatus("idle")
-      setSync({ kind: "error", message: result.reason })
+      onSyncChange({ kind: "error", message: result.reason })
     } catch {
       setSaveStatus("idle")
-      setSync({ kind: "error", message: "No se pudo guardar. Revisa tu conexión e inténtalo de nuevo." })
+      onSyncChange({ kind: "error", message: "No se pudo guardar. Revisa tu conexión e inténtalo de nuevo." })
     }
-  }, [activeFlowId, nodes, edges, pathNames])
+  }, [activeFlowId, nodes, edges, pathNames, sync, onSyncChange])
 
   // ---- autosave (debounced) ----
   useEffect(() => {
@@ -466,7 +481,7 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
       try {
         const outcome = await importFlowFromJson(rawJson, fallbackName)
         if (!outcome.ok) {
-          setSync({ kind: "error", message: outcome.error })
+          onSyncChange({ kind: "error", message: outcome.error })
           return
         }
         setFlows((f) => [
@@ -475,9 +490,9 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
         ])
         // Same flow switch as everywhere else: the Liveblocks room remounts on the new id.
         loadFlow(outcome.flow)
-        setSync(outcome.warnings.length > 0 ? { kind: "import-warnings", messages: outcome.warnings } : null)
+        onSyncChange(outcome.warnings.length > 0 ? { kind: "import-warnings", messages: outcome.warnings } : null)
       } catch {
-        setSync({ kind: "error", message: "No se pudo importar el flujo." })
+        onSyncChange({ kind: "error", message: "No se pudo importar el flujo." })
       } finally {
         setSwitching(false)
       }
@@ -485,32 +500,10 @@ function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerPro
     [loadFlow],
   )
 
-  const handleImportError = useCallback((message: string) => setSync({ kind: "error", message }), [])
+  const handleImportError = useCallback((message: string) => onSyncChange({ kind: "error", message }), [])
 
   const handleReloadApp = useCallback(() => window.location.reload(), [])
-  const handleDismissSync = useCallback(() => setSync(null), [])
-
-  // ---- stale deploy: count down, then reload, but never over unsaved work ----
-  useEffect(() => {
-    if (!newAppVersion || dirtyRef.current) {
-      setReloadIn(null)
-      return
-    }
-    setReloadIn(AUTO_RELOAD_SECONDS)
-    const timer = setInterval(() => {
-      if (dirtyRef.current) {
-        setReloadIn(null)
-        clearInterval(timer)
-        return
-      }
-      setReloadIn((value) => (value === null ? null : value - 1))
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [newAppVersion])
-
-  useEffect(() => {
-    if (reloadIn !== null && reloadIn <= 0) window.location.reload()
-  }, [reloadIn])
+  const handleDismissSync = useCallback(() => onSyncChange(null), [])
 
   // Last line of defence: never lose unsaved edits to a reload or a closed tab.
   useEffect(() => {
@@ -806,6 +799,36 @@ import { Room } from "@/app/Room"
 export function FlowStudio({ initialFlows, initialFlow }: { initialFlows: FlowSummary[], initialFlow: FlowDetail | null }) {
   const [activeFlow, setActiveFlow] = useState<FlowDetail | null>(initialFlow)
 
+  // Everything below has to outlive the room: switching or importing a flow changes the
+  // `<Room>` key, so the whole editor remounts. State kept inside it would be discarded
+  // before the user could read it.
+  const [sync, setSync] = useState<SyncState | null>(null)
+  const [reloadIn, setReloadIn] = useState<number | null>(null)
+  const newAppVersion = useAppVersion(APP_VERSION_INTERVAL_MS)
+  const dirtyRef = useRef(false)
+
+  // ---- stale deploy: count down, then reload, but never over unsaved work ----
+  useEffect(() => {
+    if (!newAppVersion || dirtyRef.current) {
+      setReloadIn(null)
+      return
+    }
+    setReloadIn(AUTO_RELOAD_SECONDS)
+    const timer = setInterval(() => {
+      if (dirtyRef.current) {
+        setReloadIn(null)
+        clearInterval(timer)
+        return
+      }
+      setReloadIn((value) => (value === null ? null : value - 1))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [newAppVersion])
+
+  useEffect(() => {
+    if (reloadIn !== null && reloadIn <= 0) window.location.reload()
+  }, [reloadIn])
+
   return (
     <ReactFlowProvider>
       <Room 
@@ -814,7 +837,16 @@ export function FlowStudio({ initialFlows, initialFlow }: { initialFlows: FlowSu
         initialNodes={activeFlow?.nodes ?? START_ONLY}
         initialEdges={activeFlow?.edges ?? []}
       >
-        <StudioInner initialFlows={initialFlows} initialFlow={activeFlow} onFlowChange={setActiveFlow} />
+        <StudioInner
+          initialFlows={initialFlows}
+          initialFlow={activeFlow}
+          onFlowChange={setActiveFlow}
+          sync={sync}
+          onSyncChange={setSync}
+          newAppVersion={newAppVersion}
+          reloadIn={reloadIn}
+          dirtyRef={dirtyRef}
+        />
       </Room>
     </ReactFlowProvider>
   )
