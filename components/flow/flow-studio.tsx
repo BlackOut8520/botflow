@@ -16,10 +16,11 @@ import {
   type NodeChange,
   type EdgeChange,
   type OnSelectionChangeParams,
+  type Edge,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 
-import type { BotNode, BotNodeData, NodeKind } from "@/lib/flow-types"
+import type { BotNode, BotEdge, BotNodeData, NodeKind } from "@/lib/flow-types"
 import { NODE_KINDS } from "@/lib/flow-types"
 import { NODE_VAR } from "@/lib/node-visuals"
 import { useSimulator } from "@/lib/use-simulator"
@@ -32,7 +33,6 @@ import {
   renameFlow,
   deleteFlow,
   importFlowFromJson,
-  pollFlows,
 } from "@/app/actions/flows"
 import { useAppVersion } from "@/lib/use-app-version"
 import { SimulationContext } from "./simulation-context"
@@ -45,6 +45,15 @@ import { FlowBar, type SaveStatus } from "./flow-bar"
 import { SyncBanner, type SyncState } from "./sync-banner"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Workflow, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react"
+import { useUpdateMyPresence, useStorage, useMutation } from "@liveblocks/react/suspense"
+import { LiveObject } from "@liveblocks/client"
+import { toStoredEdge, toStoredNode, toStoredNodeData } from "@/liveblocks.config"
+import { Cursors } from "./cursors"
+import { runFlowAudit } from "@/lib/flow-audit"
+import { AuditDialog } from "./audit-dialog"
+import { AuditPanel } from "./audit-panel"
+import { extractFlowPaths } from "@/lib/flow-simulator"
+import { PathsPanel } from "./paths-panel"
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
@@ -99,19 +108,10 @@ const START_ONLY: BotNode[] = [
   { id: "start", type: "bot", position: { x: 0, y: 160 }, data: { kind: "start", label: "Inicio" } },
 ]
 
-/** How often the editor asks the server whether this flow moved on. */
-const POLL_INTERVAL_MS = 15_000
-/** How often it checks whether a newer deploy of the app itself is live. */
+/** How often the editor checks whether a newer deploy of the app itself is live. */
 const APP_VERSION_INTERVAL_MS = 60_000
 /** Grace period before a stale tab reloads itself once a new deploy is detected. */
 const AUTO_RELOAD_SECONDS = 15
-/** How long the "pulled the newest version" notice stays up. */
-const REFRESHED_NOTICE_MS = 6_000
-
-/** Stable signature of the flow list, so polling only re-renders on real changes. */
-function listSignature(list: FlowSummary[]) {
-  return list.map((f) => `${f.id}:${f.name}:${f.updatedAt}`).join("|")
-}
 
 /** Changes that represent real user edits worth persisting. */
 function isMeaningful(changes: NodeChange[] | EdgeChange[]) {
@@ -121,294 +121,326 @@ function isMeaningful(changes: NodeChange[] | EdgeChange[]) {
 interface StudioInnerProps {
   initialFlows: FlowSummary[]
   initialFlow: FlowDetail | null
+  onFlowChange: (flow: FlowDetail) => void
 }
 
-function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<BotNode>(initialFlow?.nodes ?? START_ONLY)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlow?.edges ?? [])
+function StudioInner({ initialFlows, initialFlow, onFlowChange }: StudioInnerProps) {
+  const liveNodes = useStorage((root) => root.nodes)
+  const liveEdges = useStorage((root) => root.edges)
+
+  const nodes = useMemo(() => {
+    if (!liveNodes) return (initialFlow?.nodes ?? START_ONLY) as BotNode[]
+    if (typeof (liveNodes as any).values === "function") return Array.from((liveNodes as any).values()) as BotNode[]
+    if (Array.isArray(liveNodes)) return liveNodes as BotNode[]
+    return Object.values(liveNodes) as BotNode[]
+  }, [liveNodes, initialFlow])
+
+  const edges = useMemo(() => {
+    if (!liveEdges) return (initialFlow?.edges ?? []) as Edge[]
+    if (typeof (liveEdges as any).values === "function") return Array.from((liveEdges as any).values()) as Edge[]
+    if (Array.isArray(liveEdges)) return liveEdges as Edge[]
+    return Object.values(liveEdges) as Edge[]
+  }, [liveEdges, initialFlow])
+  
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [tab, setTab] = useState<"blocks" | "props">("blocks")
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
+  const [tab, setTab] = useState<"blocks" | "props" | "audit" | "paths">("blocks")
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
 
+  // audit state
+  const [auditOpen, setAuditOpen] = useState(false)
+
+
+
   // flow management
   const [flows, setFlows] = useState<FlowSummary[]>(initialFlows)
-  const [activeFlowId, setActiveFlowId] = useState<string | null>(initialFlow?.id ?? null)
+  const activeFlowId = initialFlow?.id ?? null
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
   const [switching, setSwitching] = useState(false)
   const dirtyRef = useRef(false)
+  const [pathNames, setPathNames] = useState<Record<string, string>>(initialFlow?.pathNames ?? {})
 
-  // ---- concurrency / freshness ----
+  // ---- notices: failed saves, repaired imports, stale deploy ----
   const [sync, setSync] = useState<SyncState | null>(null)
   const [reloadIn, setReloadIn] = useState<number | null>(null)
   const newAppVersion = useAppVersion(APP_VERSION_INTERVAL_MS)
-  /** The `updatedAt` this editor loaded: the optimistic-locking token sent on save. */
-  const baseVersionRef = useRef<string | null>(initialFlow?.updatedAt ?? null)
-  /** True while a switch/import/delete is in flight, so polling stays out of the way. */
-  const busyRef = useRef(false)
-  const savingRef = useRef(false)
-  /** True while an unresolved divergence is on screen: no autosave, no auto-refresh. */
-  const blockedRef = useRef(false)
 
   const wrapperRef = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition, setCenter, fitView } = useReactFlow()
+  const { screenToFlowPosition, setCenter } = useReactFlow()
 
   const sim = useSimulator({ nodes, edges })
+  const updateMyPresence = useUpdateMyPresence()
 
-  /** Setting sync state also flips the guard the background loops read. */
-  const setSyncState = useCallback((next: SyncState | null) => {
-    blockedRef.current = next?.kind === "conflict" || next?.kind === "remote-newer" || next?.kind === "deleted"
-    setSync(next)
-  }, [])
+  // audit report (memoized)
+  const auditReport = useMemo(() => runFlowAudit(nodes as BotNode[], edges as BotEdge[]), [nodes, edges])
 
-  /**
-   * Write the canvas to the server under optimistic locking.
-   *
-   * `force` skips the version check and is only reachable from the explicit
-   * "Guardar la mía" action in the conflict banner.
-   */
-  const persist = useCallback(
-    async (force = false) => {
-      const id = activeFlowId
-      if (!id) return
-      savingRef.current = true
-      setSaveStatus("saving")
-      try {
-        const outcome = await saveFlow(id, nodes, edges, force ? null : baseVersionRef.current)
-        if (outcome.status === "ok") {
-          baseVersionRef.current = outcome.updatedAt
-          dirtyRef.current = false
-          setSaveStatus("saved")
-          setSyncState(null)
-          setFlows((list) => list.map((f) => (f.id === id ? { ...f, updatedAt: outcome.updatedAt } : f)))
-          return
-        }
-        setSaveStatus("idle")
-        if (outcome.status === "conflict") setSyncState({ kind: "conflict" })
-        else if (outcome.status === "missing") setSyncState({ kind: "deleted" })
-        else setSyncState({ kind: "error", message: outcome.reason })
-      } catch {
-        setSaveStatus("idle")
-        setSyncState({ kind: "error", message: "No se pudo guardar. Revisa tu conexión e inténtalo de nuevo." })
-      } finally {
-        savingRef.current = false
+  // simulator report (memoized)
+  const simulatorReport = useMemo(() => extractFlowPaths(nodes as BotNode[], edges as BotEdge[]), [nodes, edges])
+
+  const handleFocusNode = useCallback(
+    (nodeId: string) => {
+      const targetNode = nodes.find((n) => n.id === nodeId)
+      if (targetNode) {
+        setSelectedId(nodeId)
+        setTab("props")
+        setCenter(targetNode.position.x + 120, targetNode.position.y + 60, { zoom: 1.2, duration: 700 })
       }
     },
-    [activeFlowId, nodes, edges, setSyncState],
+    [nodes, setCenter],
   )
+
+  /**
+   * Write the canvas to the server.
+   *
+   * A rejected save has to surface: the autosave runs from a timer, so a failure that
+   * is only thrown away leaves the user believing their work is persisted.
+   */
+  const persist = useCallback(async () => {
+    if (!activeFlowId) return
+    setSaveStatus("saving")
+    try {
+      const result = await saveFlow(activeFlowId, nodes, edges, pathNames)
+      if (result.ok) {
+        dirtyRef.current = false
+        setSaveStatus("saved")
+        // A save that went through invalidates a previous failure notice.
+        setSync((current) => (current?.kind === "error" ? null : current))
+        return
+      }
+      setSaveStatus("idle")
+      setSync({ kind: "error", message: result.reason })
+    } catch {
+      setSaveStatus("idle")
+      setSync({ kind: "error", message: "No se pudo guardar. Revisa tu conexión e inténtalo de nuevo." })
+    }
+  }, [activeFlowId, nodes, edges, pathNames])
 
   // ---- autosave (debounced) ----
   useEffect(() => {
     if (!activeFlowId || !dirtyRef.current) return
-    // While a divergence is unresolved, retrying would just hammer the server.
-    if (blockedRef.current) return
     setSaveStatus("saving")
-    const t = setTimeout(() => void persist(), 800)
+    const t = setTimeout(() => {
+      void persist()
+    }, 800)
     return () => clearTimeout(t)
-  }, [nodes, edges, activeFlowId, persist])
+  }, [nodes, edges, pathNames, activeFlowId, persist])
 
   const markDirty = useCallback(() => {
     dirtyRef.current = true
   }, [])
 
   // ---- manual save (button) ----
-  const handleSaveNow = useCallback(() => void persist(), [persist])
+  const handleSaveNow = useCallback(() => {
+    void persist()
+  }, [persist])
 
   // wrap change handlers so only genuine edits flag the flow as dirty
-  const handleNodesChange = useCallback(
-    (changes: NodeChange<BotNode>[]) => {
-      if (isMeaningful(changes)) markDirty()
-      onNodesChange(changes)
-    },
-    [onNodesChange, markDirty],
-  )
-  const handleEdgesChange = useCallback(
-    (changes: EdgeChange[]) => {
-      if (isMeaningful(changes)) markDirty()
-      onEdgesChange(changes)
-    },
-    [onEdgesChange, markDirty],
-  )
+  const onNodesChange = useMutation(({ storage }, changes: NodeChange<BotNode>[]) => {
+    if (isMeaningful(changes)) markDirty()
+    const map = storage.get("nodes")
+    for (const c of changes) {
+      if (c.type === "position" && c.position) {
+        const node = map.get(c.id)
+        if (node) node.update({ position: c.position })
+      } else if (c.type === "remove") {
+        map.delete(c.id)
+      } else if (c.type === "dimensions" && c.dimensions) {
+        const node = map.get(c.id)
+        if (node) node.update({ measured: c.dimensions })
+      }
+    }
+  }, [markDirty])
 
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      markDirty()
-      setEdges((eds) => addEdge({ ...connection, animated: false }, eds))
-    },
-    [setEdges, markDirty],
-  )
+  const onEdgesChange = useMutation(({ storage }, changes: EdgeChange[]) => {
+    if (isMeaningful(changes)) markDirty()
+    const map = storage.get("edges")
+    for (const c of changes) {
+      if (c.type === "remove") map.delete(c.id)
+    }
+  }, [markDirty])
 
-  const updateNodeData = useCallback(
-    (id: string, patch: Partial<BotNodeData>) => {
-      markDirty()
-      setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)))
-    },
-    [setNodes, markDirty],
-  )
+  const handleNodesChange = onNodesChange
+  const handleEdgesChange = onEdgesChange
 
-  const deleteNode = useCallback(
-    (id: string) => {
-      markDirty()
-      setNodes((nds) => nds.filter((n) => n.id !== id))
-      setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id))
-      setSelectedId(null)
-      setTab("blocks")
-    },
-    [setNodes, setEdges, markDirty],
-  )
+  const onConnect = useMutation(({ storage }, connection: Connection) => {
+    markDirty()
+    const newEdge: BotEdge = {
+      ...connection,
+      id: `e-${connection.source}-${connection.sourceHandle}-${connection.target}-${connection.targetHandle}`,
+    } as BotEdge
+    storage.get("edges").set(newEdge.id, new LiveObject(toStoredEdge(newEdge)))
+  }, [markDirty])
 
-    const addNode = useCallback(
-    (kind: NodeKind, position?: { x: number; y: number }) => {
+  const updateNodeData = useMutation(({ storage }, id: string, patch: Partial<BotNodeData>) => {
+    markDirty()
+    const node = storage.get("nodes").get(id)
+    if (node) {
+      const currentData = node.get("data")
+      node.update({ data: toStoredNodeData({ ...currentData, ...patch }) })
+    }
+  }, [markDirty])
+
+  const deleteNode = useMutation(({ storage }, id: string) => {
+    markDirty()
+    storage.get("nodes").delete(id)
+    const edgesMap = storage.get("edges")
+    for (const [eId, edge] of edgesMap.entries()) {
+      if (edge.get("source") === id || edge.get("target") === id) {
+        edgesMap.delete(eId)
+      }
+    }
+    setSelectedId(null)
+    setTab("blocks")
+  }, [markDirty])
+
+  const addNode = useMutation(({ storage }, kind: NodeKind, position?: { x: number; y: number }) => {
+    markDirty()
+    const id = uid("n")
+    const pos = position ?? (() => {
+      const wrapper = wrapperRef.current
+      const cx = wrapper ? wrapper.clientWidth / 2 : 400
+      const cy = wrapper ? wrapper.clientHeight / 2 : 300
+      const center = screenToFlowPosition({ x: cx, y: cy })
+      return {
+        x: center.x - 128 + (Math.random() - 0.5) * 80,
+        y: center.y - 40 + (Math.random() - 0.5) * 80,
+      }
+    })()
+    const node: BotNode = { id, type: "bot", position: pos, data: defaultData(kind) }
+    storage.get("nodes").set(id, new LiveObject(toStoredNode(node)))
+    setSelectedId(id)
+    setTab("props")
+  }, [markDirty, screenToFlowPosition])
+
+  const duplicateNode = useMutation(({ storage }, id: string) => {
+    try {
       markDirty()
-      const id = uid("n")
-      // Si no viene posición (drag & drop), calculamos el centro del lienzo visible
-      const pos = position ?? (() => {
-        const wrapper = wrapperRef.current
-        const cx = wrapper ? wrapper.clientWidth / 2 : 400
-        const cy = wrapper ? wrapper.clientHeight / 2 : 300
-        const center = screenToFlowPosition({ x: cx, y: cy })
-        return {
-          x: center.x - 128 + (Math.random() - 0.5) * 80,
-          y: center.y - 40 + (Math.random() - 0.5) * 80,
-        }
+      const targetNode = nodes.find((n) => n.id === id) ?? (() => {
+        const live = storage.get("nodes")?.get(id)
+        if (!live) return null
+        return typeof (live as any).toObject === "function" ? (live as any).toObject() : live
       })()
-      const node: BotNode = { id, type: "bot", position: pos, data: defaultData(kind) }
-      setNodes((nds) => [...nds, node])
-      setSelectedId(id)
-      setTab("props")
-    },
-    [setNodes, markDirty, screenToFlowPosition],
-  )
+      if (!targetNode) return
 
-  const duplicateNode = useCallback(
-    (id: string) => {
-      markDirty()
-      setNodes((nds) => {
-        const sourceNode = nds.find((n) => n.id === id)
-        if (!sourceNode) return nds
-        const newId = uid("n")
-        const pos = { x: sourceNode.position.x + 30, y: sourceNode.position.y + 30 }
-        // Deep copy data and reset identifiers for internal elements like branches
-        const newData = JSON.parse(JSON.stringify(sourceNode.data))
-        if (newData.options) newData.options.forEach((o: any) => o.id = uid("opt"))
-        if (newData.branches) {
-          newData.branches.forEach((b: any) => {
-            b.id = uid("br")
-            if (b.rules) b.rules.forEach((r: any) => r.id = uid("rl"))
-          })
+      const newId = uid("n")
+      const pos = {
+        x: (targetNode.position?.x ?? 0) + 40,
+        y: (targetNode.position?.y ?? 0) + 40,
+      }
+
+      // Safely clone data stripping any Liveblocks proxies or internal circular symbols
+      const cleanData = (data: any): any => {
+        if (!data || typeof data !== "object") return data
+        const res: any = Array.isArray(data) ? [] : {}
+        for (const k of Object.keys(data)) {
+          if (k.startsWith("_") || typeof data[k] === "function") continue
+          const val = data[k]
+          if (val && typeof val === "object") {
+            const raw = typeof val.toObject === "function" ? val.toObject() : val
+            res[k] = cleanData(raw)
+          } else {
+            res[k] = val
+          }
         }
-        if (newData.dateBranches) newData.dateBranches.forEach((db: any) => db.id = uid("db"))
-        
-        const newNode: BotNode = { id: newId, type: "bot", position: pos, data: newData }
-        return [...nds, newNode]
-      })
-    },
-    [setNodes, markDirty],
-  )
+        return res
+      }
+
+      const newData = cleanData(targetNode.data ?? {})
+      if (Array.isArray(newData.options)) {
+        newData.options = newData.options.map((o: any) => ({ ...o, id: uid("opt") }))
+      }
+      if (Array.isArray(newData.branches)) {
+        newData.branches = newData.branches.map((b: any) => ({
+          ...b,
+          id: uid("br"),
+          rules: Array.isArray(b.rules) ? b.rules.map((r: any) => ({ ...r, id: uid("rl") })) : b.rules,
+        }))
+      }
+      if (Array.isArray(newData.dateBranches)) {
+        newData.dateBranches = newData.dateBranches.map((db: any) => ({ ...db, id: uid("db") }))
+      }
+
+      const newNode: BotNode = {
+        id: newId,
+        type: targetNode.type ?? "bot",
+        position: pos,
+        data: newData,
+        selected: false,
+      }
+
+      const nodesMap = storage.get("nodes")
+      if (nodesMap) {
+        nodesMap.set(newId, new LiveObject(toStoredNode(newNode)))
+      }
+      setSelectedId(newId)
+      setTab("props")
+    } catch (err) {
+      console.error("Error duplicating node:", err)
+    }
+  }, [markDirty, nodes])
 
   // ---- flow switching / management ----
   const loadFlow = useCallback(
-    (flow: FlowDetail, options?: { fit?: boolean }) => {
+    (flow: FlowDetail) => {
       dirtyRef.current = false
-      baseVersionRef.current = flow.updatedAt
-      setActiveFlowId(flow.id)
-      setNodes(flow.nodes)
-      setEdges(flow.edges)
       setSelectedId(null)
       setTab("blocks")
       setSaveStatus("idle")
       sim.reset()
-      // `fitView` on the <ReactFlow> element only applies to the first render, so an
-      // imported or switched flow has to be framed by hand or it can land off-screen.
-      if (options?.fit) window.setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 60)
+      onFlowChange(flow)
     },
-    [setNodes, setEdges, sim.reset, fitView],
+    [onFlowChange, sim],
   )
 
   const handleSelectFlow = useCallback(
     async (id: string) => {
       if (id === activeFlowId) return
-      busyRef.current = true
       setSwitching(true)
-      try {
-        const flow = await getFlow(id)
-        if (flow) {
-          loadFlow(flow, { fit: true })
-          setSyncState(null)
-        } else {
-          setSyncState({ kind: "error", message: "Ese flujo ya no existe." })
-        }
-      } catch {
-        setSyncState({ kind: "error", message: "No se pudo abrir el flujo." })
-      } finally {
-        busyRef.current = false
-        setSwitching(false)
-      }
+      const flow = await getFlow(id)
+      if (flow) loadFlow(flow)
+      setSwitching(false)
     },
-    [activeFlowId, loadFlow, setSyncState],
+    [activeFlowId, loadFlow],
   )
 
   const handleCreateFlow = useCallback(async () => {
-    busyRef.current = true
     setSwitching(true)
-    try {
-      const flow = await createFlow()
-      setFlows((f) => [{ id: flow.id, name: flow.name, updatedAt: flow.updatedAt }, ...f])
-      loadFlow(flow, { fit: true })
-      setSyncState(null)
-    } catch {
-      setSyncState({ kind: "error", message: "No se pudo crear el flujo." })
-    } finally {
-      busyRef.current = false
-      setSwitching(false)
-    }
-  }, [loadFlow, setSyncState])
+    const summary = await createFlow()
+    const flow = await getFlow(summary.id)
+    setFlows((f) => [summary, ...f])
+    if (flow) loadFlow(flow)
+    setSwitching(false)
+  }, [loadFlow])
 
   const handleRenameFlow = useCallback(
     async (name: string) => {
-      const id = activeFlowId
-      if (!id) return
-      setFlows((f) => f.map((x) => (x.id === id ? { ...x, name } : x)))
-      try {
-        const updatedAt = await renameFlow(id, name)
-        // A rename bumps the row, so adopt the new token or the next save conflicts.
-        if (updatedAt) {
-          baseVersionRef.current = updatedAt
-          setFlows((f) => f.map((x) => (x.id === id ? { ...x, updatedAt } : x)))
-        }
-      } catch {
-        setSyncState({ kind: "error", message: "No se pudo renombrar el flujo." })
-      }
+      if (!activeFlowId) return
+      setFlows((f) => f.map((x) => (x.id === activeFlowId ? { ...x, name } : x)))
+      await renameFlow(activeFlowId, name)
     },
-    [activeFlowId, setSyncState],
+    [activeFlowId],
   )
 
   const handleDeleteFlow = useCallback(async () => {
     if (!activeFlowId) return
     const remaining = flows.filter((f) => f.id !== activeFlowId)
-    busyRef.current = true
     setSwitching(true)
     dirtyRef.current = false
-    try {
-      await deleteFlow(activeFlowId)
-      if (remaining.length === 0) {
-        // deleting the last flow: start fresh with a new empty one
-        const flow = await createFlow()
-        setFlows([{ id: flow.id, name: flow.name, updatedAt: flow.updatedAt }])
-        loadFlow(flow, { fit: true })
-      } else {
-        setFlows(remaining)
-        const next = await getFlow(remaining[0].id)
-        if (next) loadFlow(next, { fit: true })
-      }
-      setSyncState(null)
-    } catch {
-      setSyncState({ kind: "error", message: "No se pudo eliminar el flujo." })
-    } finally {
-      busyRef.current = false
-      setSwitching(false)
+    await deleteFlow(activeFlowId)
+    if (remaining.length === 0) {
+      // deleting the last flow: start fresh with a new empty one
+      const summary = await createFlow()
+      const flow = await getFlow(summary.id)
+      setFlows([summary])
+      if (flow) loadFlow(flow)
+    } else {
+      setFlows(remaining)
+      const next = await getFlow(remaining[0].id)
+      if (next) loadFlow(next)
     }
-  }, [activeFlowId, flows, loadFlow, setSyncState])
+    setSwitching(false)
+  }, [activeFlowId, flows, loadFlow])
 
   const activeFlow = useMemo(() => flows.find((f) => f.id === activeFlowId) ?? null, [flows, activeFlowId])
 
@@ -430,138 +462,43 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
 
   const handleImportFlow = useCallback(
     async (rawJson: string, fallbackName: string) => {
-      busyRef.current = true
       setSwitching(true)
       try {
         const outcome = await importFlowFromJson(rawJson, fallbackName)
         if (!outcome.ok) {
-          setSyncState({ kind: "error", message: outcome.error })
+          setSync({ kind: "error", message: outcome.error })
           return
         }
         setFlows((f) => [
           { id: outcome.flow.id, name: outcome.flow.name, updatedAt: outcome.flow.updatedAt },
           ...f,
         ])
-        loadFlow(outcome.flow, { fit: true })
-        setSyncState(outcome.warnings.length > 0 ? { kind: "import-warnings", messages: outcome.warnings } : null)
+        // Same flow switch as everywhere else: the Liveblocks room remounts on the new id.
+        loadFlow(outcome.flow)
+        setSync(outcome.warnings.length > 0 ? { kind: "import-warnings", messages: outcome.warnings } : null)
       } catch {
-        setSyncState({ kind: "error", message: "No se pudo importar el flujo." })
+        setSync({ kind: "error", message: "No se pudo importar el flujo." })
       } finally {
-        busyRef.current = false
         setSwitching(false)
       }
     },
-    [loadFlow, setSyncState],
+    [loadFlow],
   )
 
-  const handleImportError = useCallback(
-    (message: string) => setSyncState({ kind: "error", message }),
-    [setSyncState],
-  )
-
-  // ---- divergence resolution ----
-  const handlePullRemote = useCallback(async () => {
-    const id = activeFlowId
-    if (!id) return
-    busyRef.current = true
-    setSwitching(true)
-    try {
-      const fresh = await getFlow(id)
-      if (fresh) {
-        loadFlow(fresh, { fit: false })
-        setSyncState({ kind: "refreshed" })
-      } else {
-        setSyncState({ kind: "deleted" })
-      }
-    } catch {
-      setSyncState({ kind: "error", message: "No se pudo traer la versión del servidor." })
-    } finally {
-      busyRef.current = false
-      setSwitching(false)
-    }
-  }, [activeFlowId, loadFlow, setSyncState])
-
-  const handleOverwrite = useCallback(async () => {
-    setSyncState(null)
-    await persist(true)
-  }, [persist, setSyncState])
+  const handleImportError = useCallback((message: string) => setSync({ kind: "error", message }), [])
 
   const handleReloadApp = useCallback(() => window.location.reload(), [])
-  const handleDismissSync = useCallback(() => setSyncState(null), [setSyncState])
-
-  /**
-   * Poll the server for changes to this flow.
-   *
-   * With no unsaved local edits the newer version is pulled in silently — that is the
-   * periodic refresh. With unsaved edits nothing is touched and the banner asks the user
-   * which version wins, because overwriting either side automatically loses work.
-   */
-  useEffect(() => {
-    const id = activeFlowId
-    if (!id) return
-    let cancelled = false
-
-    const tick = async () => {
-      if (cancelled || document.visibilityState === "hidden") return
-      if (busyRef.current || savingRef.current || blockedRef.current) return
-      try {
-        const list = await pollFlows()
-        if (cancelled) return
-        setFlows((prev) => (listSignature(prev) === listSignature(list) ? prev : list))
-
-        const remote = list.find((f) => f.id === id)
-        if (!remote) {
-          setSyncState({ kind: "deleted" })
-          return
-        }
-        if (remote.updatedAt === baseVersionRef.current) return
-        if (dirtyRef.current) {
-          setSyncState({ kind: "remote-newer" })
-          return
-        }
-        const fresh = await getFlow(id)
-        // Bail out if the user started editing while the fetch was in flight.
-        if (cancelled || !fresh || dirtyRef.current || blockedRef.current) return
-        loadFlow(fresh, { fit: false })
-        setSyncState({ kind: "refreshed" })
-      } catch {
-        // Transient failure: try again on the next tick.
-      }
-    }
-
-    const timer = setInterval(tick, POLL_INTERVAL_MS)
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void tick()
-    }
-    document.addEventListener("visibilitychange", onVisible)
-
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-      document.removeEventListener("visibilitychange", onVisible)
-    }
-  }, [activeFlowId, loadFlow, setSyncState])
-
-  // The "pulled the newest version" notice is informational; retire it on its own.
-  useEffect(() => {
-    if (sync?.kind !== "refreshed") return
-    const t = setTimeout(() => setSyncState(null), REFRESHED_NOTICE_MS)
-    return () => clearTimeout(t)
-  }, [sync, setSyncState])
+  const handleDismissSync = useCallback(() => setSync(null), [])
 
   // ---- stale deploy: count down, then reload, but never over unsaved work ----
   useEffect(() => {
-    if (!newAppVersion) {
-      setReloadIn(null)
-      return
-    }
-    if (dirtyRef.current || blockedRef.current) {
+    if (!newAppVersion || dirtyRef.current) {
       setReloadIn(null)
       return
     }
     setReloadIn(AUTO_RELOAD_SECONDS)
     const timer = setInterval(() => {
-      if (dirtyRef.current || blockedRef.current) {
+      if (dirtyRef.current) {
         setReloadIn(null)
         clearInterval(timer)
         return
@@ -586,31 +523,33 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
     return () => window.removeEventListener("beforeunload", handler)
   }, [])
 
-  const onDrop = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault()
-      const kind = event.dataTransfer.getData("application/flow-node") as NodeKind
-      if (!kind) return
-      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-      addNode(kind, position)
-    },
-    [screenToFlowPosition, addNode],
-  )
-
-  const onDragOver = useCallback((event: React.DragEvent) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = "move"
+  const handleSimulate = useCallback(() => {
+    setLeftOpen(true)
+    setTab("paths")
   }, [])
 
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     const node = params.nodes[0]
+    const edge = params.edges[0]
     if (node) {
       setSelectedId(node.id)
+      setSelectedEdgeId(null)
       setTab("props")
+    } else if (edge) {
+      setSelectedEdgeId(edge.id)
+      setSelectedId(null)
+    } else {
+      setSelectedId(null)
+      setSelectedEdgeId(null)
     }
   }, [])
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedId) ?? null, [nodes, selectedId])
+
+  const flowNodes = useMemo(
+    () => nodes.map((n) => ({ ...n, selected: n.id === selectedId })),
+    [nodes, selectedId],
+  )
 
   // sync active/visited state onto nodes styling via context + pan to active node
   const activeNodeId = sim.activeNodeId
@@ -623,25 +562,35 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNodeId])
 
+  const lastCursorTimeRef = useRef(0)
+
   // colorize edges by source node kind (and highlight active/visited path)
+  const nodeColorMap = useMemo(() => {
+    const map = new Map<string, string>()
+    nodes.forEach((n) => {
+      map.set(n.id, NODE_VAR[n.data.kind] ?? "var(--muted-foreground)")
+    })
+    return map
+  }, [nodes])
+
   const styledEdges = useMemo(
     () =>
       edges.map((e) => {
         const active = sim.visitedNodeIds.has(e.source) && sim.visitedNodeIds.has(e.target)
-        const sourceNode = nodes.find((n) => n.id === e.source)
-        const sourceColor = sourceNode ? NODE_VAR[sourceNode.data.kind] : "var(--muted-foreground)"
+        const sourceColor = nodeColorMap.get(e.source) ?? "var(--muted-foreground)"
+        const isSelected = e.id === selectedEdgeId
         // sim running → animado con color primario
         if (active && sim.isRunning) {
-          return { ...e, animated: true, style: { stroke: "var(--primary)", strokeWidth: 3 } }
+          return { ...e, selected: isSelected, animated: true, style: { stroke: "var(--primary)", strokeWidth: 3 } }
         }
         // sim terminada → línea del path resaltada (estática)
         if (active && !sim.isRunning && sim.visitedNodeIds.size > 0) {
-          return { ...e, animated: false, style: { stroke: "var(--primary)", strokeWidth: 3, opacity: 0.5 } }
+          return { ...e, selected: isSelected, animated: false, style: { stroke: "var(--primary)", strokeWidth: 3, opacity: 0.5 } }
         }
         // sin simulación → color del nodo origen
-        return { ...e, animated: false, style: { stroke: sourceColor, strokeWidth: 2.5, opacity: 0.75 } }
+        return { ...e, selected: isSelected, animated: false, style: { stroke: sourceColor, strokeWidth: 2.5, opacity: 0.75 } }
       }),
-    [edges, nodes, sim.visitedNodeIds, sim.isRunning],
+    [edges, nodeColorMap, sim.visitedNodeIds, sim.isRunning, selectedEdgeId],
   )
 
   const simContextValue = useMemo(
@@ -651,13 +600,14 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
       isRunning: sim.isRunning,
       startFrom: sim.startFrom,
       duplicateNode,
+      playPath: sim.playPath,
     }),
-    [sim.activeNodeId, sim.visitedNodeIds, sim.isRunning, sim.startFrom, duplicateNode],
+    [sim.activeNodeId, sim.visitedNodeIds, sim.isRunning, sim.startFrom, duplicateNode, sim.playPath],
   )
 
   return (
     <SimulationContext.Provider value={simContextValue}>
-      <div className="flex h-screen flex-col bg-background">
+      <div className="flex h-screen flex-col bg-background overflow-hidden">
         {/* top bar */}
         <header className="flex items-center gap-3 border-b border-border px-5 py-3">
           <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -672,6 +622,11 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
             activeFlowId={activeFlowId}
             saveStatus={saveStatus}
             switching={switching}
+            auditIssueCount={auditReport.criticalCount + auditReport.warningCount}
+            onAudit={() => {
+              setLeftOpen(true)
+              setTab("audit")
+            }}
             onSelect={handleSelectFlow}
             onCreate={handleCreateFlow}
             onRename={handleRenameFlow}
@@ -680,6 +635,7 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
             onExport={handleExportFlow}
             onImport={handleImportFlow}
             onImportError={handleImportError}
+            onSimulate={handleSimulate}
           />
         </header>
 
@@ -687,78 +643,136 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
           state={sync}
           newAppVersion={newAppVersion}
           reloadIn={reloadIn}
-          onPullRemote={handlePullRemote}
-          onOverwrite={handleOverwrite}
           onReloadApp={handleReloadApp}
           onDismiss={handleDismissSync}
         />
 
         <div className="flex min-h-0 flex-1">
-          {/* left sidebar: blocks / properties */}
+          {/* left sidebar: blocks / properties / audit */}
           {leftOpen && (
-            <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-card">
-              <Tabs value={tab} onValueChange={(v) => setTab(v as "blocks" | "props")} className="flex min-h-0 flex-1 flex-col">
+            <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-card min-h-0">
+              <Tabs value={tab} onValueChange={(v) => setTab(v as "blocks" | "props" | "audit" | "paths")} className="flex min-h-0 flex-1 flex-col">
                 <div className="border-b border-border px-3 pt-3">
                   <TabsList className="w-full">
-                    <TabsTrigger value="blocks" className="flex-1">Bloques</TabsTrigger>
-                    <TabsTrigger value="props" className="flex-1">Propiedades</TabsTrigger>
+                    <TabsTrigger value="blocks" className="flex-1 text-xs">Bloques</TabsTrigger>
+                    <TabsTrigger value="props" className="flex-1 text-xs">Ajustes</TabsTrigger>
+                    <TabsTrigger value="audit" className="flex-1 text-xs gap-1">
+                      Salud
+                      {(auditReport.criticalCount + auditReport.warningCount) > 0 && (
+                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white px-1">
+                          {auditReport.criticalCount + auditReport.warningCount}
+                        </span>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="paths" className="flex-1 text-xs">Caminos</TabsTrigger>
                   </TabsList>
                 </div>
-                <TabsContent value="blocks" className="min-h-0 flex-1 overflow-y-auto p-3">
+                <TabsContent value="blocks" className="min-h-0 flex-1 h-full w-full overflow-y-auto p-3 m-0 flex">
                   <NodePalette onAdd={addNode} />
                 </TabsContent>
-                <TabsContent value="props" className="min-h-0 flex-1 overflow-hidden p-0">
+                <TabsContent value="props" className="min-h-0 flex-1 h-full w-full overflow-hidden p-0 m-0 flex flex-col">
                   <PropertiesPanel node={selectedNode} onChange={updateNodeData} onDelete={deleteNode} />
+                </TabsContent>
+                <TabsContent value="audit" className="min-h-0 flex-1 h-full w-full overflow-hidden p-0 m-0 flex flex-col">
+                  <AuditPanel report={auditReport} onFocusNode={handleFocusNode} />
+                </TabsContent>
+                <TabsContent value="paths" className="min-h-0 flex-1 h-full w-full overflow-hidden p-0 m-0 flex flex-col">
+                  <PathsPanel 
+                    paths={simulatorReport.paths} 
+                    hasMore={simulatorReport.hasMore} 
+                    pathNames={pathNames}
+                    onRenamePath={(pathId, newName) => {
+                      setPathNames(prev => {
+                        const next = { ...prev, [pathId]: newName }
+                        if (!newName) delete next[pathId]
+                        return next
+                      })
+                      markDirty()
+                    }}
+                  />
                 </TabsContent>
               </Tabs>
             </aside>
           )}
 
-          {/* center: canvas */}
-          <div ref={wrapperRef} className="relative min-w-0 flex-1" onDrop={onDrop} onDragOver={onDragOver}>
-            <ReactFlow
-              nodes={nodes}
-              edges={styledEdges}
-              onNodesChange={handleNodesChange}
-              onEdgesChange={handleEdgesChange}
-              onConnect={onConnect}
-              onSelectionChange={onSelectionChange}
-              onPaneClick={() => setSelectedId(null)}
-              nodeTypes={nodeTypes}
-              edgeTypes={edgeTypes}
-              fitView
-              proOptions={{ hideAttribution: true }}
-              defaultEdgeOptions={{ style: { strokeWidth: 3 } }}
-            >
-              <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} className="text-border" />
-              <Controls className="!border-border !bg-card !shadow-sm [&_button]:!border-border [&_button]:!bg-card [&_button]:!fill-foreground [&_button:hover]:!bg-accent" />
-              <MiniMap
-                pannable
-                zoomable
-                className="!bg-card"
-                nodeColor={(n) => NODE_VAR[(n.data as BotNodeData).kind] ?? "var(--muted)"}
-                maskColor="color-mix(in oklch, var(--background) 70%, transparent)"
-              />
-            </ReactFlow>
+          {/* center canvas */}
+          <main className="relative flex min-w-0 flex-1 flex-col">
+            <div className="flex items-center justify-between border-b border-border bg-card/50 px-3 py-1.5 backdrop-blur">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setLeftOpen((o) => !o)}
+                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                  title={leftOpen ? "Ocultar panel izquierdo" : "Mostrar panel izquierdo"}
+                >
+                  {leftOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+                </button>
 
-            {/* toggle left panel button */}
-            <button
-              onClick={() => setLeftOpen((v) => !v)}
-              title={leftOpen ? "Ocultar panel izquierdo" : "Mostrar panel izquierdo"}
-              className="absolute left-2 top-2 z-10 flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
-            >
-              {leftOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
-            </button>
+                {selectedNode && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    Seleccionado: <strong className="font-semibold text-foreground">{selectedNode.data.label}</strong>
+                  </span>
+                )}
+              </div>
 
-            {/* toggle right panel button */}
-            <button
-              onClick={() => setRightOpen((v) => !v)}
-              title={rightOpen ? "Ocultar simulador" : "Mostrar simulador"}
-              className="absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+              <button
+                type="button"
+                onClick={() => setRightOpen((o) => !o)}
+                className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                title={rightOpen ? "Ocultar simulador" : "Mostrar simulador"}
+              >
+                {rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+              </button>
+            </div>
+
+            <div
+              ref={wrapperRef}
+              className="relative min-h-0 flex-1"
+              onPointerMoveCapture={(e) => {
+                if (!wrapperRef.current) return
+                const now = Date.now()
+                if (now - lastCursorTimeRef.current < 40) return
+                lastCursorTimeRef.current = now
+                const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+                updateMyPresence({ cursor: position })
+              }}
+              onPointerLeave={() => updateMyPresence({ cursor: null })}
             >
-              {rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
-            </button>
-          </div>
+              <ReactFlow
+                nodes={flowNodes}
+                edges={styledEdges}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={handleEdgesChange}
+                onConnect={onConnect}
+                onSelectionChange={onSelectionChange}
+                onEdgeClick={(_, edge) => setSelectedEdgeId(edge.id)}
+                onPaneClick={() => {
+                  setSelectedId(null)
+                  setSelectedEdgeId(null)
+                }}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                onlyRenderVisibleElements={true}
+                fitView
+                fitViewOptions={{ padding: 0.2, minZoom: 0.005 }}
+                minZoom={0.005}
+                maxZoom={3}
+                proOptions={{ hideAttribution: true }}
+                defaultEdgeOptions={{ style: { strokeWidth: 3 } }}
+              >
+                <Cursors />
+                <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} className="text-border" />
+                <Controls className="!border-border !bg-card !shadow-sm [&_button]:!border-border [&_button]:!bg-card [&_button]:!fill-foreground [&_button:hover]:!bg-accent" />
+                <MiniMap
+                  pannable
+                  zoomable
+                  className="!bg-card"
+                  nodeColor={(n) => NODE_VAR[(n.data as BotNodeData).kind] ?? "var(--muted)"}
+                  maskColor="color-mix(in oklch, var(--background) 70%, transparent)"
+                />
+              </ReactFlow>
+            </div>
+          </main>
 
           {/* right: simulator */}
           {rightOpen && (
@@ -771,8 +785,10 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
                 variables={sim.variables}
                 simulatedDay={sim.simulatedDay}
                 simulatedMonth={sim.simulatedMonth}
+                simulatedYear={sim.simulatedYear}
                 onSimulatedDayChange={sim.setSimulatedDay}
                 onSimulatedMonthChange={sim.setSimulatedMonth}
+                onSimulatedYearChange={sim.setSimulatedYear}
                 onStart={sim.start}
                 onReset={sim.reset}
                 onChooseOption={sim.chooseOption}
@@ -786,10 +802,21 @@ function StudioInner({ initialFlows, initialFlow }: StudioInnerProps) {
   )
 }
 
-export function FlowStudio({ initialFlows, initialFlow }: StudioInnerProps) {
+import { Room } from "@/app/Room"
+export function FlowStudio({ initialFlows, initialFlow }: { initialFlows: FlowSummary[], initialFlow: FlowDetail | null }) {
+  const [activeFlow, setActiveFlow] = useState<FlowDetail | null>(initialFlow)
+
   return (
     <ReactFlowProvider>
-      <StudioInner initialFlows={initialFlows} initialFlow={initialFlow} />
+      <Room 
+        key={activeFlow?.id ?? "default"}
+        roomId={activeFlow?.id ?? "default"}
+        initialNodes={activeFlow?.nodes ?? START_ONLY}
+        initialEdges={activeFlow?.edges ?? []}
+      >
+        <StudioInner initialFlows={initialFlows} initialFlow={activeFlow} onFlowChange={setActiveFlow} />
+      </Room>
     </ReactFlowProvider>
   )
 }
+
