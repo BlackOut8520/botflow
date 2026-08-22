@@ -24,6 +24,7 @@ import type { BotNode, BotEdge, BotNodeData, NodeKind } from "@/lib/flow-types"
 import { NODE_KINDS } from "@/lib/flow-types"
 import { NODE_VAR } from "@/lib/node-visuals"
 import { useSimulator } from "@/lib/use-simulator"
+import { includeActiveFlow } from "@/lib/flow-room"
 import {
   type FlowSummary,
   type FlowDetail,
@@ -119,9 +120,10 @@ function isMeaningful(changes: NodeChange[] | EdgeChange[]) {
 }
 
 interface StudioInnerProps {
-  initialFlows: FlowSummary[]
+  flows: FlowSummary[]
+  onFlowsChange: React.Dispatch<React.SetStateAction<FlowSummary[]>>
   initialFlow: FlowDetail | null
-  onFlowChange: (flow: FlowDetail) => void
+  onFlowChange: (flow: FlowDetail, options?: { replaceRoomStorage?: boolean }) => void
   /**
    * Notice state and the unsaved-changes flag are owned by `FlowStudio`, above the
    * Liveblocks `<Room>`. Switching or importing a flow changes the room id, which
@@ -136,7 +138,8 @@ interface StudioInnerProps {
 }
 
 function StudioInner({
-  initialFlows,
+  flows,
+  onFlowsChange,
   initialFlow,
   onFlowChange,
   sync,
@@ -174,7 +177,6 @@ function StudioInner({
 
 
   // flow management
-  const [flows, setFlows] = useState<FlowSummary[]>(initialFlows)
   const activeFlowId = initialFlow?.id ?? null
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
   const [switching, setSwitching] = useState(false)
@@ -397,13 +399,13 @@ function StudioInner({
 
   // ---- flow switching / management ----
   const loadFlow = useCallback(
-    (flow: FlowDetail) => {
+    (flow: FlowDetail, options?: { replaceRoomStorage?: boolean }) => {
       dirtyRef.current = false
       setSelectedId(null)
       setTab("blocks")
       setSaveStatus("idle")
       sim.reset()
-      onFlowChange(flow)
+      onFlowChange(flow, options)
     },
     [onFlowChange, sim],
   )
@@ -423,18 +425,18 @@ function StudioInner({
     setSwitching(true)
     const summary = await createFlow()
     const flow = await getFlow(summary.id)
-    setFlows((f) => [summary, ...f])
+    onFlowsChange((f) => [summary, ...f])
     if (flow) loadFlow(flow)
     setSwitching(false)
-  }, [loadFlow])
+  }, [loadFlow, onFlowsChange])
 
   const handleRenameFlow = useCallback(
     async (name: string) => {
       if (!activeFlowId) return
-      setFlows((f) => f.map((x) => (x.id === activeFlowId ? { ...x, name } : x)))
+      onFlowsChange((f) => f.map((x) => (x.id === activeFlowId ? { ...x, name } : x)))
       await renameFlow(activeFlowId, name)
     },
-    [activeFlowId],
+    [activeFlowId, onFlowsChange],
   )
 
   const handleDeleteFlow = useCallback(async () => {
@@ -447,15 +449,15 @@ function StudioInner({
       // deleting the last flow: start fresh with a new empty one
       const summary = await createFlow()
       const flow = await getFlow(summary.id)
-      setFlows([summary])
+      onFlowsChange([summary])
       if (flow) loadFlow(flow)
     } else {
-      setFlows(remaining)
+      onFlowsChange(remaining)
       const next = await getFlow(remaining[0].id)
       if (next) loadFlow(next)
     }
     setSwitching(false)
-  }, [activeFlowId, flows, loadFlow])
+  }, [activeFlowId, flows, loadFlow, onFlowsChange])
 
   const activeFlow = useMemo(() => flows.find((f) => f.id === activeFlowId) ?? null, [flows, activeFlowId])
 
@@ -484,12 +486,9 @@ function StudioInner({
           onSyncChange({ kind: "error", message: outcome.error })
           return
         }
-        setFlows((f) => [
-          { id: outcome.flow.id, name: outcome.flow.name, updatedAt: outcome.flow.updatedAt },
-          ...f,
-        ])
-        // Same flow switch as everywhere else: the Liveblocks room remounts on the new id.
-        loadFlow(outcome.flow)
+        // Import is the only transition that must replace an already-persisted room
+        // document. Liveblocks' initialStorage alone only initializes empty rooms.
+        loadFlow(outcome.flow, { replaceRoomStorage: true })
         onSyncChange(outcome.warnings.length > 0 ? { kind: "import-warnings", messages: outcome.warnings } : null)
       } catch {
         onSyncChange({ kind: "error", message: "No se pudo importar el flujo." })
@@ -797,7 +796,14 @@ function StudioInner({
 
 import { Room } from "@/app/Room"
 export function FlowStudio({ initialFlows, initialFlow }: { initialFlows: FlowSummary[], initialFlow: FlowDetail | null }) {
-  const [activeFlow, setActiveFlow] = useState<FlowDetail | null>(initialFlow)
+  const [flows, setFlows] = useState<FlowSummary[]>(initialFlows)
+  const [activeRoom, setActiveRoom] = useState({ flow: initialFlow, replaceRoomStorage: false })
+  const activeFlow = activeRoom.flow
+
+  const handleFlowChange = useCallback((flow: FlowDetail, options?: { replaceRoomStorage?: boolean }) => {
+    setFlows((current) => includeActiveFlow(current, flow))
+    setActiveRoom({ flow, replaceRoomStorage: options?.replaceRoomStorage === true })
+  }, [])
 
   // Everything below has to outlive the room: switching or importing a flow changes the
   // `<Room>` key, so the whole editor remounts. State kept inside it would be discarded
@@ -836,11 +842,13 @@ export function FlowStudio({ initialFlows, initialFlow }: { initialFlows: FlowSu
         roomId={activeFlow?.id ?? "default"}
         initialNodes={activeFlow?.nodes ?? START_ONLY}
         initialEdges={activeFlow?.edges ?? []}
+        replaceInitialStorage={activeRoom.replaceRoomStorage}
       >
         <StudioInner
-          initialFlows={initialFlows}
+          flows={flows}
+          onFlowsChange={setFlows}
           initialFlow={activeFlow}
-          onFlowChange={setActiveFlow}
+          onFlowChange={handleFlowChange}
           sync={sync}
           onSyncChange={setSync}
           newAppVersion={newAppVersion}
@@ -851,4 +859,3 @@ export function FlowStudio({ initialFlows, initialFlow }: { initialFlows: FlowSu
     </ReactFlowProvider>
   )
 }
-
