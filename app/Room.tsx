@@ -5,13 +5,16 @@ import {
   LiveblocksProvider,
   RoomProvider,
   ClientSideSuspense,
+  useMutation,
+  useStorage,
 } from "@liveblocks/react/suspense";
 import { LiveMap, LiveObject } from "@liveblocks/client";
 import { toStoredEdge, toStoredNode } from "@/liveblocks.config";
+import { replaceRoomMapContents, shouldReplaceRoomStorage } from "@/lib/flow-room";
 import type { BotNode } from "@/lib/flow-types";
 import type { Edge } from "@xyflow/react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -63,15 +66,57 @@ function NamePrompt({ onNameSet }: { onNameSet: () => void }) {
   );
 }
 
+function RoomFallback() {
+  return (
+    <div className="flex h-screen w-screen flex-col items-center justify-center bg-background space-y-4">
+      <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <p className="text-muted-foreground animate-pulse text-sm font-medium">Conectando a la sala colaborativa...</p>
+    </div>
+  );
+}
+
+function RoomContents({
+  replaceInitialStorage,
+  initialNodes,
+  initialEdges,
+  children,
+}: {
+  replaceInitialStorage: boolean;
+  initialNodes: BotNode[];
+  initialEdges: Edge[];
+  children: ReactNode;
+}) {
+  const replacedRef = useRef(false);
+  const [ready, setReady] = useState(!replaceInitialStorage);
+  // The suspense hook keeps this component behind ClientSideSuspense until the
+  // mutable storage root exists; useMutation throws if called any earlier.
+  const storageLoaded = useStorage(() => true);
+  const replaceStorage = useMutation(({ storage }) => {
+    replaceRoomMapContents(storage.get("nodes"), initialNodes, (node) => new LiveObject(toStoredNode(node)));
+    replaceRoomMapContents(storage.get("edges"), initialEdges, (edge) => new LiveObject(toStoredEdge(edge)));
+  }, [initialNodes, initialEdges]);
+
+  useEffect(() => {
+    if (!shouldReplaceRoomStorage(replaceInitialStorage, replacedRef.current, storageLoaded)) return;
+    replacedRef.current = true;
+    replaceStorage();
+    setReady(true);
+  }, [replaceInitialStorage, replaceStorage, storageLoaded]);
+
+  return ready ? children : <RoomFallback />;
+}
+
 export function Room({ 
   roomId, 
   initialNodes,
   initialEdges,
+  replaceInitialStorage = false,
   children 
 }: { 
   roomId: string;
   initialNodes: BotNode[];
   initialEdges: Edge[];
+  replaceInitialStorage?: boolean;
   children: ReactNode; 
 }) {
   const [readyToConnect, setReadyToConnect] = useState(false);
@@ -96,13 +141,14 @@ export function Room({
           edges: new LiveMap(initialEdges.map(e => [e.id, new LiveObject(toStoredEdge(e))])),
         }}
       >
-        <ClientSideSuspense fallback={
-          <div className="flex h-screen w-screen flex-col items-center justify-center bg-background space-y-4">
-            <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            <p className="text-muted-foreground animate-pulse text-sm font-medium">Conectando a la sala colaborativa...</p>
-          </div>
-        }>
-          {children}
+        <ClientSideSuspense fallback={<RoomFallback />}>
+          <RoomContents
+            replaceInitialStorage={replaceInitialStorage}
+            initialNodes={initialNodes}
+            initialEdges={initialEdges}
+          >
+            {children}
+          </RoomContents>
         </ClientSideSuspense>
       </RoomProvider>
     </LiveblocksProvider>
